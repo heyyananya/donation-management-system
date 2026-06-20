@@ -22,14 +22,15 @@ import ConfirmDialog from '../../components/feedback/ConfirmDialog.jsx';
 import { receiptApi } from '../../api/receipt.api.js';
 import { trustApi } from '../../api/trust.api.js';
 import { pdfApi } from '../../api/pdf.api.js';
+import { yearApi } from '../../api/year.api.js';
 import { downloadBlob, openBlobInNewTab } from '../../utils/downloadBlob.js';
-import { financialYearOptions, currentFinancialYear } from '../../utils/financialYear.js';
 
 export default function ReceiptListPage() {
   const nav = useNavigate();
   const qc = useQueryClient();
   const [filters, setFilters] = useState({ financialYear: '', trustId: '', paymentType: '' });
   const { data: trusts = [] } = useQuery({ queryKey: ['trusts'], queryFn: trustApi.list });
+  const { data: years = [] } = useQuery({ queryKey: ['years'], queryFn: yearApi.list });
   const { data: meta } = useQuery({ queryKey: ['receipts', 'meta'], queryFn: receiptApi.meta });
   const { data: receipts = [], isLoading } = useQuery({
     queryKey: ['receipts', filters],
@@ -42,7 +43,9 @@ export default function ReceiptListPage() {
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['receipts'] }); qc.invalidateQueries({ queryKey: ['dashboard'] }); toast.success('Receipt deleted'); setToDelete(null); },
   });
 
-  const fyOptions = useMemo(() => financialYearOptions(8), []);
+  const fyOptions = useMemo(() => {
+    return years.map((y) => y.name).sort().reverse();
+  }, [years]);
 
   const columns = [
     { id: 'financialYear', label: 'FY', render: (r) => <Chip size="small" label={r.financialYear} /> },
@@ -112,8 +115,6 @@ export default function ReceiptListPage() {
       />
     </Box>
   );
-
-  void currentFinancialYear;
 }
 
 function RowActions({ row, onEdit, onDelete }) {
