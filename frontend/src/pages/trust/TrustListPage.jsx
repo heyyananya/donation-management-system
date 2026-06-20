@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Box, Button, IconButton, Stack, Tooltip } from '@mui/material';
+import { Box, Button, IconButton, Stack, Tooltip, Avatar } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
@@ -23,11 +23,34 @@ export default function TrustListPage() {
   });
 
   const columns = [
+    {
+      id: 'logoFileName',
+      label: 'Logo',
+      sortable: false,
+      render: (r) => (
+        <Avatar
+          variant="rounded"
+          src={r.logoFileName ? `/api/files/trust-logos/${r.logoFileName}` : ''}
+          sx={{ width: 36, height: 36, bgcolor: '#F1F5F9', fontSize: 14 }}
+        >
+          {(r.name || '').slice(0, 1) || 'T'}
+        </Avatar>
+      ),
+      width: 60,
+    },
     { id: 'name', label: 'Trust Name' },
-    { id: 'district', label: 'District' },
-    { id: 'phone', label: 'Phone' },
-    { id: 'pan', label: 'PAN' },
-    { id: 'registrationNumber', label: 'Reg. No' },
+    {
+      id: 'correspondenceAddress',
+      label: 'Header preview',
+      render: (r) => {
+        const preview = (r.correspondenceAddress || '').split('\n').slice(0, 2).join(' · ');
+        return (
+          <Box sx={{ maxWidth: 360, color: 'text.secondary', fontSize: 13, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            {preview}
+          </Box>
+        );
+      },
+    },
     {
       id: '_actions', label: 'Actions', sortable: false, align: 'right',
       render: (r) => (
@@ -43,13 +66,13 @@ export default function TrustListPage() {
     <Box>
       <PageHeader
         title="Trust Master"
-        subtitle="Manage trusts, their registration details, and logos."
+        subtitle="Manage trusts: name, logo, and the printed document header."
         actions={<Button variant="contained" startIcon={<AddIcon />} onClick={() => nav('/trusts/new')}>Add Trust</Button>}
       />
       <DataTable
         rows={trusts}
         columns={columns}
-        searchKeys={['name', 'district', 'pan', 'phone', 'registrationNumber']}
+        searchKeys={['name', 'correspondenceAddress']}
       />
       <ConfirmDialog
         open={!!toDelete}

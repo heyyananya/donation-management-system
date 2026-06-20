@@ -12,10 +12,16 @@ import PageHeader from '../../components/feedback/PageHeader.jsx';
 import { trustApi } from '../../api/trust.api.js';
 
 const initial = {
-  name: '', address: '', area: '', taluka: '', district: '', establishDate: '',
-  contactNumber: '', trustType: '', sanchalan: '', registrationNumber: '',
-  registrationText: '', unitText: '', correspondenceAddress: '', phone: '',
-  eightyGText: '', pan: '', panText: '', letterAddressLinesText: '', footerInformation: '',
+  name: '',
+  trustType: '',
+  area: '',
+  taluka: '',
+  district: '',
+  sanchalan: '',
+  establishDate: '',
+  contactNumber: '',
+  address: '',
+  correspondenceAddress: '',
 };
 
 export default function TrustFormPage() {
@@ -28,8 +34,6 @@ export default function TrustFormPage() {
 
   const { register, handleSubmit, reset, formState: { errors, isSubmitting } } = useForm({ defaultValues: initial });
 
-  // Logo state — file picked by the user in this session, plus a local preview
-  // URL so they see what they picked before clicking Save.
   const [logoFile, setLogoFile] = useState(null);
   const [logoLocalPreview, setLogoLocalPreview] = useState('');
   const [removeExistingLogo, setRemoveExistingLogo] = useState(false);
@@ -39,12 +43,13 @@ export default function TrustFormPage() {
       reset({
         ...initial,
         ...existing,
-        letterAddressLinesText: (existing.letterAddressLines || []).join('\n'),
+        // establish_date comes back as a YYYY-MM-DD string (or null) thanks to
+        // the pg type parser; surface it directly to the date input.
+        establishDate: existing.establishDate || '',
       });
     }
   }, [existing, reset]);
 
-  // Clean up local preview Object URLs when the picked file changes.
   useEffect(() => {
     if (!logoFile) { setLogoLocalPreview(''); return undefined; }
     const url = URL.createObjectURL(logoFile);
@@ -54,13 +59,7 @@ export default function TrustFormPage() {
 
   const save = useMutation({
     mutationFn: async (data) => {
-      const payload = {
-        ...data,
-        letterAddressLines: (data.letterAddressLinesText || '').split(/\r?\n/).map((s) => s.trim()).filter(Boolean),
-      };
-      delete payload.letterAddressLinesText;
-      const trust = isEdit ? await trustApi.update(id, payload) : await trustApi.create(payload);
-      // Apply logo changes after the trust exists (needs an id).
+      const trust = isEdit ? await trustApi.update(id, data) : await trustApi.create(data);
       if (logoFile) {
         await trustApi.uploadLogo(trust.id, logoFile);
       } else if (isEdit && removeExistingLogo && existing?.logoFileName) {
@@ -89,15 +88,19 @@ export default function TrustFormPage() {
     <Box>
       <PageHeader
         title={isEdit ? 'Edit Trust' : 'New Trust'}
-        subtitle="Trust registration, legal and footer details shown on receipts/letters."
+        subtitle="Trust identity, logo, and the header block printed on Receipt & Thanks Letter."
         actions={<Button startIcon={<ArrowBackIcon />} onClick={() => nav('/trusts')}>Back to list</Button>}
       />
       <Paper sx={{ p: { xs: 2, md: 3 }, borderRadius: 3 }} component="form" onSubmit={handleSubmit((v) => save.mutate(v))}>
         <Typography variant="overline" color="text.secondary">Identity</Typography>
         <Grid container spacing={2.5} sx={{ mt: 0.5 }}>
           <Grid item xs={12} md={8}>
-            <TextField label="Trust Name *" error={!!errors.name} helperText={errors.name?.message}
-              {...register('name', { required: 'Trust Name is required' })} />
+            <TextField
+              label="Trust Name *"
+              error={!!errors.name}
+              helperText={errors.name?.message}
+              {...register('name', { required: 'Trust Name is required' })}
+            />
           </Grid>
           <Grid item xs={12} md={4}>
             <TextField label="Trust Type" {...register('trustType')} />
@@ -115,7 +118,12 @@ export default function TrustFormPage() {
             <TextField label="Trust Sanchalan" {...register('sanchalan')} />
           </Grid>
           <Grid item xs={12} md={4}>
-            <TextField label="Establish Date" type="date" InputLabelProps={{ shrink: true }} {...register('establishDate')} />
+            <TextField
+              label="Establish Date"
+              type="date"
+              InputLabelProps={{ shrink: true }}
+              {...register('establishDate')}
+            />
           </Grid>
           <Grid item xs={12} md={4}>
             <TextField label="Contact Number" {...register('contactNumber')} />
@@ -128,7 +136,7 @@ export default function TrustFormPage() {
         <Divider sx={{ my: 3 }} />
         <Typography variant="overline" color="text.secondary">Trust Logo</Typography>
         <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.5 }}>
-          Shown in the header of the Thanks Letter. Any image format works — PNG, JPG, GIF, WebP, SVG; non-PNG/JPG files are auto-converted to PNG on the server.
+          Shown at the top of the Receipt and Thanks Letter header. Any image format works — PNG, JPG, GIF, WebP, SVG; non-PNG/JPG files are auto-converted to PNG on the server.
         </Typography>
         <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems="center" sx={{ mb: 1 }}>
           <Avatar
@@ -178,45 +186,30 @@ export default function TrustFormPage() {
         )}
 
         <Divider sx={{ my: 3 }} />
-        <Typography variant="overline" color="text.secondary">Document header (printed on Receipt & Thanks Letter)</Typography>
-        <Grid container spacing={2.5} sx={{ mt: 0.5 }}>
-          <Grid item xs={12} md={6}>
-            <TextField label="Registration Number" {...register('registrationNumber')} />
-          </Grid>
-          <Grid item xs={12} md={6}>
-            <TextField label="Trust PAN" inputProps={{ style: { textTransform: 'uppercase' } }} {...register('pan')} />
-          </Grid>
-          <Grid item xs={12}>
-            <TextField label="Registration Text" helperText='e.g. "(Registered Under Bombay Public Trust Act. 1950, NO. E/1075/Valsad )"'
-              {...register('registrationText')} />
-          </Grid>
-          <Grid item xs={12}>
-            <TextField label="Unit Text" helperText='e.g. "(Balda & Nana Vaghchhipa Unit)"' {...register('unitText')} />
-          </Grid>
-          <Grid item xs={12}>
-            <TextField label="Correspondence Address" multiline rows={2}
-              helperText="Multi-line address shown in the document header"
-              {...register('correspondenceAddress')} />
-          </Grid>
-          <Grid item xs={12} md={6}>
-            <TextField label="Phone (in header)" {...register('phone')} />
-          </Grid>
-          <Grid item xs={12} md={6}>
-            <TextField label="PAN Text (in header)" helperText='e.g. "PAN : AABTS3394J"' {...register('panText')} />
-          </Grid>
-          <Grid item xs={12}>
-            <TextField label="80G Text" helperText='e.g. "IT 80 G Exemption Certificate No. AABTS3394JF20214 DT.31-05-2021"'
-              {...register('eightyGText')} />
-          </Grid>
-          <Grid item xs={12}>
-            <TextField label="Letter address lines" multiline rows={3}
-              helperText='Address used in the donor "To" block on the donation letter (one line per row).'
-              {...register('letterAddressLinesText')} />
-          </Grid>
-          <Grid item xs={12}>
-            <TextField label="Footer Information" multiline rows={2} {...register('footerInformation')} />
-          </Grid>
-        </Grid>
+        <Typography variant="overline" color="text.secondary">
+          Correspondence Address
+        </Typography>
+        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5, mb: 1.5 }}>
+          Printed below the Trust Name on the Receipt and Thanks Letter header. Line breaks, spacing and blank lines are preserved character-for-character. Press Enter for a new line — it never submits the form.
+        </Typography>
+        <TextField
+          label="Correspondence Address"
+          multiline
+          minRows={14}
+          maxRows={30}
+          fullWidth
+          InputProps={{
+            sx: {
+              fontFamily: '"Roboto Mono", ui-monospace, SFMono-Regular, Menlo, monospace',
+              fontSize: 14,
+              lineHeight: 1.55,
+              whiteSpace: 'pre',
+            },
+          }}
+          error={!!errors.correspondenceAddress}
+          helperText={errors.correspondenceAddress?.message}
+          {...register('correspondenceAddress')}
+        />
 
         <Stack direction="row" justifyContent="flex-end" spacing={1.5} sx={{ mt: 3 }}>
           <Button onClick={() => nav('/trusts')}>Cancel</Button>

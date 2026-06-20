@@ -1,8 +1,8 @@
-// Thanks Letter renderer — Page 1 (trust -> donor thanks), then Page 2 (Letter),
-// then Page 3 (Receipt). Composed as the 3-page bundle matching ThanksLetter.pdf.
-import fs from 'node:fs';
-import path from 'node:path';
-import { A4, drawText, drawWrapped, drawCentered, drawLine, fromTop, formatDate, formatAmount } from '../layout.js';
+// Thanks Letter renderer — 3-page bundle: trust→donor thanks letter,
+// donor→trust covering letter, official receipt. Page 1 header uses the
+// shared logo → trust name → correspondence address layout.
+import { A4, drawText, drawWrapped, formatDate, formatAmount, fromTop } from '../layout.js';
+import { drawTrustHeader } from './_trustHeader.js';
 import { drawLetterOnPage } from './letterRenderer.js';
 import { drawReceiptOnPage } from './receiptRenderer.js';
 
@@ -10,60 +10,19 @@ async function drawThanksPage(pdf, page, ctx, fonts) {
   const { regular, bold } = fonts;
   const { trust, donor, receipt } = ctx;
 
-  // ---- Header band ----
-  // Logo (top-left) if available. Sniff the file's magic bytes so any image
-  // with a misleading extension still embeds correctly; try PNG then JPG.
-  if (trust.logoPath && fs.existsSync(trust.logoPath)) {
-    try {
-      const bytes = fs.readFileSync(trust.logoPath);
-      const isPng = bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47;
-      const isJpg = bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
-      let img = null;
-      if (isPng) img = await pdf.embedPng(bytes);
-      else if (isJpg) img = await pdf.embedJpg(bytes);
-      else {
-        try { img = await pdf.embedPng(bytes); }
-        catch { try { img = await pdf.embedJpg(bytes); } catch { /* unsupported */ } }
-      }
-      if (img) {
-        const size = 72;
-        page.drawImage(img, { x: 40, y: fromTop(40) - size, width: size, height: size });
-      } else {
-        console.warn(`[pdf] logo at ${trust.logoPath} is not PNG/JPG; skipping. Re-upload as .png or .jpg.`);
-      }
-    } catch (err) {
-      console.warn(`[pdf] failed to embed logo ${trust.logoPath}:`, err.message);
-    }
-  }
-  void path;
-
-  // Trust name (large bold, right of logo).
-  drawText(page, trust.name, { x: 200, y: fromTop(55), font: bold, size: 18 });
-
-  // Registration / address / phone / 80G / PAN — centered, bold, 10pt
-  let hy = fromTop(80);
-  const headerLines = [
-    trust.registrationText,
-    trust.unitText,
-    trust.correspondenceAddress ? `Correspondence Address: ${trust.correspondenceAddress.split(/\r?\n|,(?=\s)/)[0] || ''}` : '',
-    trust.correspondenceAddress ? (trust.correspondenceAddress.split(/\r?\n|,(?=\s)/).slice(1).join(', ') || '') : '',
-    trust.phone ? `Phone : ${trust.phone}` : '',
-    trust.eightyGText,
-    trust.panText,
-  ].filter(Boolean);
-  for (const line of headerLines) {
-    drawCentered(page, line, { cx: A4.width / 2 + 50, y: hy, font: bold, size: 9.5 });
-    hy -= 13;
-  }
-
-  // Black divider band.
-  const dividerY = fromTop(190);
-  page.drawRectangle({
-    x: 40, y: dividerY, width: A4.width - 80, height: 4,
+  // Header band: logo on the LEFT, trust name centered, correspondence
+  // address centered below. Matches the official Thanks Letter masthead.
+  const headerEndY = await drawTrustHeader(pdf, page, ctx, fonts, {
+    topY: fromTop(50),
+    bottomY: fromTop(225),
+    logoSize: 78,
+    logoSide: 'left',
   });
+  const dividerY = Math.min(headerEndY - 6, fromTop(230));
+  page.drawRectangle({ x: 40, y: dividerY, width: A4.width - 80, height: 4 });
 
   // ---- Body ----
-  let by = fromTop(220);
+  let by = dividerY - 30;
   drawText(page, `Date :   ${formatDate(receipt.date)}`, { x: 60, y: by, font: regular, size: 11 });
   by -= 28;
 
@@ -110,7 +69,7 @@ async function drawThanksPage(pdf, page, ctx, fonts) {
   });
 
   // ---- Closing ----
-  let cy = fromTop(560);
+  let cy = fromTop(580);
   drawText(page, 'Thanking You,', { x: 60, y: cy, font: regular, size: 11 });
   cy -= 16;
   drawText(page, 'Yours faithfully,', { x: 60, y: cy, font: regular, size: 11 });
@@ -118,8 +77,6 @@ async function drawThanksPage(pdf, page, ctx, fonts) {
   drawText(page, trust.name, { x: 60, y: cy, font: bold, size: 11 });
   cy -= 50;
   drawText(page, 'Authorised Signatory', { x: 60, y: cy, font: bold, size: 11 });
-
-  void drawLine;
 }
 
 function drawSegments(page, segments, { x, y, maxWidth, size }) {
@@ -144,13 +101,10 @@ function drawSegments(page, segments, { x, y, maxWidth, size }) {
 }
 
 export async function renderThanksLetter(pdf, ctx, fonts) {
-  // Page 1: thanks letter.
   const p1 = pdf.addPage([A4.width, A4.height]);
   await drawThanksPage(pdf, p1, ctx, fonts);
-  // Page 2: donor's covering letter (Letter renderer).
   const p2 = pdf.addPage([A4.width, A4.height]);
   await drawLetterOnPage(p2, ctx, fonts);
-  // Page 3: receipt.
   const p3 = pdf.addPage([A4.width, A4.height]);
-  await drawReceiptOnPage(p3, ctx, fonts);
+  await drawReceiptOnPage(p3, ctx, fonts, pdf);
 }

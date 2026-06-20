@@ -11,34 +11,54 @@ CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
 -- ---------------------------------------------------------------------
 -- TRUST MASTER
+-- The whole printed header (registration text, unit text, phone, 80G,
+-- PAN, etc.) is stored verbatim in `correspondence_address` as
+-- multi-line text -- nothing else is needed for the Receipt / Thanks
+-- Letter header.
 -- ---------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS trusts (
   id                     UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name                   TEXT        NOT NULL,
-  address                TEXT,
+  trust_type             TEXT,
   area                   TEXT,
   taluka                 TEXT,
   district               TEXT,
+  sanchalan              TEXT,
   establish_date         DATE,
   contact_number         TEXT,
-  trust_type             TEXT,
-  sanchalan              TEXT,
-  registration_number    TEXT,
-  registration_text      TEXT,
-  unit_text              TEXT,
+  address                TEXT,
   correspondence_address TEXT,
-  phone                  TEXT,
-  eighty_g_text          TEXT,
-  pan                    VARCHAR(10),
-  pan_text               TEXT,
-  letter_address_lines   TEXT[]      NOT NULL DEFAULT '{}',
-  footer_information     TEXT,
   logo_file_name         TEXT,
   created_at             TIMESTAMPTZ NOT NULL DEFAULT now(),
-  updated_at             TIMESTAMPTZ NOT NULL DEFAULT now(),
-  CONSTRAINT trusts_pan_format CHECK (pan IS NULL OR pan ~ '^[A-Z]{5}[0-9]{4}[A-Z]$')
+  updated_at             TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS trusts_name_idx ON trusts (lower(name));
+
+-- For older installations that had the previous narrowed schema, re-add the
+-- Identity columns. These are for record-keeping in Trust Master only — the
+-- PDF renderers still use only name, logo, and correspondence_address.
+ALTER TABLE trusts
+  ADD COLUMN IF NOT EXISTS trust_type     TEXT,
+  ADD COLUMN IF NOT EXISTS area           TEXT,
+  ADD COLUMN IF NOT EXISTS taluka         TEXT,
+  ADD COLUMN IF NOT EXISTS district       TEXT,
+  ADD COLUMN IF NOT EXISTS sanchalan      TEXT,
+  ADD COLUMN IF NOT EXISTS establish_date DATE,
+  ADD COLUMN IF NOT EXISTS contact_number TEXT,
+  ADD COLUMN IF NOT EXISTS address        TEXT;
+
+-- Drop genuinely-removed legacy header columns from very old installations.
+ALTER TABLE trusts
+  DROP CONSTRAINT IF EXISTS trusts_pan_format,
+  DROP COLUMN IF EXISTS registration_number,
+  DROP COLUMN IF EXISTS registration_text,
+  DROP COLUMN IF EXISTS unit_text,
+  DROP COLUMN IF EXISTS phone,
+  DROP COLUMN IF EXISTS eighty_g_text,
+  DROP COLUMN IF EXISTS pan,
+  DROP COLUMN IF EXISTS pan_text,
+  DROP COLUMN IF EXISTS letter_address_lines,
+  DROP COLUMN IF EXISTS footer_information;
 
 -- ---------------------------------------------------------------------
 -- DONOR MASTER

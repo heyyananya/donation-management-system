@@ -1,5 +1,6 @@
-// Donation Letter renderer (donor -> trust covering letter).
-// Coordinates calibrated against Letter.pdf.
+// Donation Letter renderer (donor → trust covering letter). Trust now has only
+// name+logo+correspondenceAddress, so the "To" block is just "The Trustee,
+// <trust.name>" — no separate trust address field exists anymore.
 import { A4, drawText, drawWrapped, drawLine, fromTop, formatDate, formatAmount } from '../layout.js';
 
 const LEFT = 60;
@@ -11,7 +12,6 @@ export async function drawLetterOnPage(page, ctx, fonts) {
 
   // ---- From block (right-aligned, top right) ----
   let y = fromTop(80);
-  // Right-anchored block; left edge of block at x = ~370.
   const fromX = 370;
   drawText(page, 'From :', { x: fromX, y, font: bold, size: 11 });
   y -= 18;
@@ -29,7 +29,6 @@ export async function drawLetterOnPage(page, ctx, fonts) {
     drawText(page, donor.pan, { x: fromX + 60, y, font: bold, size: 11 });
   }
 
-  // ---- Date (right) ----
   y -= 30;
   drawText(page, `Date : ${formatDate(receipt.date)}`, { x: fromX, y, font: regular, size: 11 });
 
@@ -40,18 +39,12 @@ export async function drawLetterOnPage(page, ctx, fonts) {
   drawText(page, 'The Trustee,', { x: LEFT, y: ty, font: bold, size: 11 });
   ty -= 16;
   drawText(page, trust.name, { x: LEFT, y: ty, font: bold, size: 11 });
-  ty -= 16;
-  for (const line of (trust.letterAddressLines || []).slice(0, 4)) {
-    drawText(page, line, { x: LEFT, y: ty, font: regular, size: 10 });
-    ty -= 14;
-  }
 
   // ---- Body ----
   let by = fromTop(440);
   drawText(page, 'Dear Sir,', { x: LEFT, y: by, font: regular, size: 11 });
   by -= 22;
 
-  // Compose body sentence with bold inline tokens by drawing in segments.
   const seg = [
     { text: 'We are enclosing herewith, the sum of amount.', font: regular },
     { text: `${formatAmount(receipt.amount)}/- (${receipt.amountInWords})`, font: bold },
@@ -76,11 +69,9 @@ export async function drawLetterOnPage(page, ctx, fonts) {
   cy -= 16;
   drawText(page, 'Yours faithfully,', { x: LEFT, y: cy, font: regular, size: 11 });
 
-  // Signature line.
   const sigY = fromTop(740);
   drawLine(page, { x1: LEFT, y1: sigY, x2: LEFT + 150, y2: sigY, thickness: 0.8 });
 
-  // Encl
   drawText(page, 'Encl:', { x: LEFT, y: fromTop(810), font: regular, size: 11 });
 }
 

@@ -25,7 +25,17 @@ app.use(express.json({ limit: '2mb' }));
 app.get('/api/health', (_req, res) => res.json({ ok: true, time: new Date().toISOString() }));
 app.use('/api/auth', authRoutes);
 
-// Static uploaded files (auth-protected so docs aren't world-readable).
+// Trust logos are servable without auth so <img src> tags in the UI (which
+// cannot send the JWT) can actually load them. Filenames are UUIDs, and the
+// logo is the same image printed at the top of every Receipt and Thanks
+// Letter -- not sensitive content.
+app.use(
+  '/api/files/trust-logos',
+  express.static(path.join(env.uploadsDir, 'trust-logos'), { maxAge: '5m' })
+);
+
+// Everything else under /api/files (donor identity documents in particular)
+// stays behind auth.
 app.use(
   '/api/files',
   authMiddleware,

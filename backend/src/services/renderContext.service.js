@@ -11,7 +11,14 @@ function splitAddress(address) {
     .split(/\r?\n|,(?=\s)/)
     .map((s) => s.trim())
     .filter(Boolean)
-    .slice(0, 6);
+    .slice(0, 8);
+}
+
+// Verbatim split — keep blank lines and original spacing so PDF output matches
+// the textarea character-for-character.
+function splitVerbatim(text) {
+  if (!text) return [];
+  return String(text).replace(/\r\n/g, '\n').split('\n');
 }
 
 export async function buildRenderContext(receiptId) {
@@ -33,15 +40,8 @@ export async function buildRenderContext(receiptId) {
     trust: {
       id: trust.id,
       name: trust.name || '',
-      registrationText: trust.registrationText || '',
-      unitText: trust.unitText || '',
-      correspondenceAddress: trust.correspondenceAddress || '',
-      phone: trust.phone || '',
-      eightyGText: trust.eightyGText || '',
-      panText: trust.panText || (trust.pan ? `PAN : ${trust.pan}` : ''),
-      letterAddressLines: (trust.letterAddressLines && trust.letterAddressLines.length
-        ? trust.letterAddressLines
-        : splitAddress(trust.address)).slice(0, 6),
+      // The full printed header textarea — one entry per line, blanks kept.
+      correspondenceAddressLines: splitVerbatim(trust.correspondenceAddress),
       logoPath: logoPath && fs.existsSync(logoPath) ? logoPath : '',
     },
     donor: {

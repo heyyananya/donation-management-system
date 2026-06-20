@@ -8,24 +8,21 @@ async function ensureTrust() {
   if (trusts.some((t) => t.name === 'SHREE VALLABH GAUSHALA TRUST')) return;
   await trustRepo.create({
     name: 'SHREE VALLABH GAUSHALA TRUST',
-    address: 'Shree Vallabh Ashram, Killa - Pardi-396125, Dist.Valsad, Gujarat, India.',
-    area: 'Killa-Pardi',
-    taluka: 'Pardi',
-    district: 'Valsad',
-    establishDate: '',
-    contactNumber: '+91 9375712470',
-    trustType: 'Public Trust',
-    sanchalan: '',
-    registrationNumber: 'E/1075/Valsad',
-    registrationText: '(Registered Under Bombay Public Trust Act. 1950, NO. E/1075/Valsad )',
-    unitText: '(Balda & Nana Vaghchhipa Unit)',
-    correspondenceAddress: 'Shree Vallabh Ashram\nKilla - Pardi-396125. Dist.Valsad, Gujarat, India.',
-    phone: '+91 9375712470',
-    eightyGText: 'IT 80 G Exemption Certificate No. AABTS3394JF20214 DT.31-05-2021',
-    pan: 'AABTS3394J',
-    panText: 'PAN : AABTS3394J',
-    letterAddressLines: ['VALLABH ASHRAM N.H.NO-48', 'KILLA PARDI-396125', 'DIST.VALSAD'],
-    footerInformation: '',
+    // The Trust Name is rendered separately above the correspondence block;
+    // the user only types what goes BELOW the name into this textarea.
+    correspondenceAddress:
+`(Registered Under Bombay Public Trust Act. 1950, NO. E/1075/Valsad)
+(Balda & Nana Vaghchhipa Unit)
+
+Correspondence Address:
+Shree Vallabh Ashram
+Killa - Pardi - 396125
+Dist. Valsad, Gujarat, India
+
+Phone: +91 9375712470
+PAN : AABTS3394J
+
+U/S 80G Exemption Certificate No. AABTS3394JF20214 DT.31-05-2021`,
     logoFileName: '',
   });
 }

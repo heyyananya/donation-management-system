@@ -1,30 +1,21 @@
 import { trustRepo, receiptRepo } from '../repositories/index.js';
 import { AppError } from '../middleware/error.js';
-import { assertString, assertPan, assertDate } from '../utils/validators.js';
+import { assertString, assertDate } from '../utils/validators.js';
 
 function sanitize(input) {
   return {
     name: assertString(input.name, 'Trust Name', { required: true, maxLength: 200 }),
-    address: assertString(input.address, 'Trust Address', { maxLength: 500 }),
+    // Identity fields — stored for record-keeping. Not printed on documents.
+    trustType: assertString(input.trustType, 'Trust Type', { maxLength: 200 }),
     area: assertString(input.area, 'Area', { maxLength: 200 }),
     taluka: assertString(input.taluka, 'Taluka', { maxLength: 200 }),
     district: assertString(input.district, 'District', { maxLength: 200 }),
+    sanchalan: assertString(input.sanchalan, 'Trust Sanchalan', { maxLength: 200 }),
     establishDate: assertDate(input.establishDate, 'Establish Date'),
     contactNumber: assertString(input.contactNumber, 'Contact Number', { maxLength: 30 }),
-    trustType: assertString(input.trustType, 'Trust Type', { maxLength: 200 }),
-    sanchalan: assertString(input.sanchalan, 'Trust Sanchalan', { maxLength: 200 }),
-    registrationNumber: assertString(input.registrationNumber, 'Registration Number', { maxLength: 100 }),
-    registrationText: assertString(input.registrationText, 'Registration Text', { maxLength: 500 }),
-    unitText: assertString(input.unitText, 'Unit Text', { maxLength: 300 }),
-    correspondenceAddress: assertString(input.correspondenceAddress, 'Correspondence Address', { maxLength: 500 }),
-    phone: assertString(input.phone, 'Phone', { maxLength: 50 }),
-    eightyGText: assertString(input.eightyGText, '80G Information', { maxLength: 300 }),
-    pan: assertPan(input.pan, 'Trust PAN'),
-    panText: assertString(input.panText, 'PAN Text', { maxLength: 200 }),
-    letterAddressLines: Array.isArray(input.letterAddressLines)
-      ? input.letterAddressLines.map((l) => String(l)).filter(Boolean).slice(0, 6)
-      : [],
-    footerInformation: assertString(input.footerInformation, 'Footer Information', { maxLength: 500 }),
+    address: assertString(input.address, 'Trust Address', { maxLength: 1000 }),
+    // Printed on Receipt & Thanks Letter, verbatim.
+    correspondenceAddress: assertString(input.correspondenceAddress, 'Correspondence Address', { maxLength: 4000 }),
     logoFileName: input.logoFileName ? assertString(input.logoFileName, 'Logo', { maxLength: 300 }) : '',
   };
 }

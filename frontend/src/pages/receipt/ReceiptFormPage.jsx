@@ -9,6 +9,7 @@ import SaveIcon from '@mui/icons-material/Save';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import { toast } from 'react-toastify';
 import PageHeader from '../../components/feedback/PageHeader.jsx';
+import SelectedTrustPanel from '../../components/feedback/SelectedTrustPanel.jsx';
 import { receiptApi } from '../../api/receipt.api.js';
 import { donorApi } from '../../api/donor.api.js';
 import { trustApi } from '../../api/trust.api.js';
@@ -185,6 +186,13 @@ export default function ReceiptFormPage() {
                 }}
               />
             )}
+          </Grid>
+          {/* Read-only "Selected Trust Information" — refreshes whenever the
+              Trust selection (or the underlying Trust Master record) changes. */}
+          <Grid item xs={12}>
+            <SelectedTrustPanel
+              trust={trusts.find((t) => t.id === (watched?.trustId || existing?.trustId)) || null}
+            />
           </Grid>
           <Grid item xs={12} md={4}>
             <TextField
