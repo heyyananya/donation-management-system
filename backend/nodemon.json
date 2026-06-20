@@ -1,0 +1,13 @@
+{
+  "watch": ["src"],
+  "ext": "js,json",
+  "ignore": [
+    "src/data/**",
+    "src/uploads/**",
+    "src/templates/**",
+    "src/scripts/**"
+  ],
+  "exec": "node src/server.js",
+  "delay": 250,
+  "legacyWatch": true
+}
