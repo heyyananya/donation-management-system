@@ -141,23 +141,48 @@ CREATE INDEX IF NOT EXISTS receipts_year_idx  ON receipts (financial_year);
 CREATE INDEX IF NOT EXISTS receipts_date_idx  ON receipts (date DESC);
 
 -- ---------------------------------------------------------------------
--- USERS (admin logins)
+-- USERS (logins)
 --
 -- Password is stored as a bcrypt hash, never the plaintext. Authentication
 -- looks the row up by `username` and verifies the hash with bcryptjs.
+--
+-- role: 'admin' has unrestricted access (including User Master). 'user' is
+-- a regular operator whose trust visibility is gated by the `user_trusts`
+-- join below.
 -- ---------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS users (
   id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   username      TEXT        NOT NULL UNIQUE,
   password_hash TEXT        NOT NULL,
   display_name  TEXT,
+  email         TEXT,
   role          TEXT        NOT NULL DEFAULT 'admin',
   is_active     BOOLEAN     NOT NULL DEFAULT TRUE,
   created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
-  CONSTRAINT users_role_ok CHECK (role IN ('admin'))
+  CONSTRAINT users_role_ok CHECK (role IN ('admin','user'))
 );
 CREATE INDEX IF NOT EXISTS users_username_idx ON users (lower(username));
+
+-- Older installations may still have the legacy single-value role check.
+ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_ok;
+ALTER TABLE users
+  ADD CONSTRAINT users_role_ok CHECK (role IN ('admin','user'));
+ALTER TABLE users ADD COLUMN IF NOT EXISTS email TEXT;
+
+-- ---------------------------------------------------------------------
+-- USER ↔ TRUST ACCESS
+--
+-- For role='user' rows, list the trusts they may see / operate on. An admin
+-- is unrestricted regardless of what's in here.
+-- ---------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS user_trusts (
+  user_id    UUID NOT NULL REFERENCES users(id)  ON DELETE CASCADE,
+  trust_id   UUID NOT NULL REFERENCES trusts(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (user_id, trust_id)
+);
+CREATE INDEX IF NOT EXISTS user_trusts_trust_idx ON user_trusts (trust_id);
 
 -- ---------------------------------------------------------------------
 -- AUDIT LOG

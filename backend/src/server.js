@@ -4,7 +4,7 @@ import cors from 'cors';
 import path from 'node:path';
 import fs from 'node:fs';
 import { env } from './config/env.js';
-import { authMiddleware } from './middleware/auth.js';
+import { authMiddleware, attachTrustScope } from './middleware/auth.js';
 import { notFound, errorHandler } from './middleware/error.js';
 
 import authRoutes from './routes/auth.routes.js';
@@ -15,6 +15,7 @@ import receiptRoutes from './routes/receipt.routes.js';
 import pdfRoutes from './routes/pdf.routes.js';
 import dashboardRoutes from './routes/dashboard.routes.js';
 import yearRoutes from './routes/year.routes.js';
+import userRoutes from './routes/user.routes.js';
 
 const app = express();
 
@@ -44,12 +45,13 @@ app.use(
 
 // Authenticated API.
 app.use('/api/donors', authMiddleware, donorRoutes);
-app.use('/api/trusts', authMiddleware, trustRoutes);
+app.use('/api/trusts', authMiddleware, attachTrustScope, trustRoutes);
 app.use('/api/remarks', authMiddleware, remarkRoutes);
-app.use('/api/receipts', authMiddleware, receiptRoutes);
+app.use('/api/receipts', authMiddleware, attachTrustScope, receiptRoutes);
 app.use('/api/years', authMiddleware, yearRoutes);
-app.use('/api/pdf', authMiddleware, pdfRoutes);
-app.use('/api/dashboard', authMiddleware, dashboardRoutes);
+app.use('/api/users', authMiddleware, userRoutes);
+app.use('/api/pdf', authMiddleware, attachTrustScope, pdfRoutes);
+app.use('/api/dashboard', authMiddleware, attachTrustScope, dashboardRoutes);
 
 app.use(notFound);
 app.use(errorHandler);

@@ -9,6 +9,11 @@ export const receiptRepo = {
     return list
       .filter((r) => (filters.financialYear ? r.financialYear === filters.financialYear : true))
       .filter((r) => (filters.trustId ? r.trustId === filters.trustId : true))
+      .filter((r) => {
+        if (!Array.isArray(filters.trustIds)) return true;
+        if (filters.trustIds.length === 0) return false;
+        return filters.trustIds.includes(r.trustId);
+      })
       .filter((r) => (filters.donorId ? r.donorId === filters.donorId : true))
       .filter((r) => (filters.paymentType ? r.paymentType === filters.paymentType : true))
       .filter((r) => (filters.dateFrom ? r.date >= filters.dateFrom : true))

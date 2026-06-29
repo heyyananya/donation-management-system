@@ -50,6 +50,15 @@ export const receiptRepo = {
     let i = 1;
     if (filters.financialYear) { where.push(`financial_year = $${i++}`); vals.push(filters.financialYear); }
     if (filters.trustId) { where.push(`trust_id = $${i++}`); vals.push(filters.trustId); }
+    if (Array.isArray(filters.trustIds)) {
+      if (filters.trustIds.length === 0) {
+        // Caller is restricted to zero trusts — no rows.
+        where.push('FALSE');
+      } else {
+        where.push(`trust_id = ANY($${i++}::uuid[])`);
+        vals.push(filters.trustIds);
+      }
+    }
     if (filters.donorId) { where.push(`donor_id = $${i++}`); vals.push(filters.donorId); }
     if (filters.paymentType) { where.push(`payment_type = $${i++}`); vals.push(filters.paymentType); }
     if (filters.dateFrom) { where.push(`date >= $${i++}::date`); vals.push(filters.dateFrom); }

@@ -3,11 +3,9 @@ import { q, tx } from '../../config/db.js';
 import { rowToObject } from './_mapper.js';
 import { logAudit } from './_audit.js';
 
-const COLS = `id, username, password_hash, display_name, role, is_active,
+const COLS = `id, username, password_hash, display_name, email, role, is_active,
               created_at, updated_at`;
 
-// Strip the password hash from audit-log snapshots so the secret never leaves
-// the users table. Identity columns are kept for context.
 function safeSnapshot(row) {
   if (!row) return null;
   const { passwordHash, ...rest } = row;
@@ -15,29 +13,76 @@ function safeSnapshot(row) {
   return rest;
 }
 
+async function loadTrustIds(client, userId) {
+  const r = await client.query(
+    `SELECT trust_id FROM user_trusts WHERE user_id = $1`,
+    [userId]
+  );
+  return r.rows.map((row) => row.trust_id);
+}
+
+async function replaceTrustIds(client, userId, trustIds) {
+  await client.query(`DELETE FROM user_trusts WHERE user_id = $1`, [userId]);
+  if (!trustIds || trustIds.length === 0) return;
+  const values = trustIds.map((_, i) => `($1, $${i + 2})`).join(', ');
+  await client.query(
+    `INSERT INTO user_trusts (user_id, trust_id) VALUES ${values}`,
+    [userId, ...trustIds]
+  );
+}
+
+async function decorate(row, client) {
+  if (!row) return null;
+  const obj = rowToObject(row);
+  const runner = client
+    ? (sql, params) => client.query(sql, params)
+    : (sql, params) => q(sql, params);
+  const r = await runner(
+    `SELECT trust_id FROM user_trusts WHERE user_id = $1 ORDER BY trust_id`,
+    [obj.id]
+  );
+  obj.trustIds = r.rows.map((tr) => tr.trust_id);
+  return obj;
+}
+
 export const userRepo = {
   async findAll() {
     const r = await q(`SELECT ${COLS} FROM users ORDER BY lower(username)`);
-    return r.rows.map(rowToObject);
+    return Promise.all(r.rows.map((row) => decorate(row)));
   },
   async findById(id) {
     const r = await q(`SELECT ${COLS} FROM users WHERE id = $1`, [id]);
-    return rowToObject(r.rows[0]);
+    if (!r.rows[0]) return null;
+    return decorate(r.rows[0]);
   },
   async findByUsername(username) {
     const r = await q(`SELECT ${COLS} FROM users WHERE lower(username) = lower($1)`, [username]);
-    return rowToObject(r.rows[0]);
+    if (!r.rows[0]) return null;
+    return decorate(r.rows[0]);
   },
-  async create({ username, passwordHash, displayName = null, role = 'admin', isActive = true }) {
+  async findTrustIdsForUser(id) {
+    const r = await q(`SELECT trust_id FROM user_trusts WHERE user_id = $1`, [id]);
+    return r.rows.map((row) => row.trust_id);
+  },
+  async create({
+    username,
+    passwordHash,
+    displayName = null,
+    email = null,
+    role = 'admin',
+    isActive = true,
+    trustIds = [],
+  }) {
     const id = uuid();
     return tx(async (c) => {
       const r = await c.query(
-        `INSERT INTO users (id, username, password_hash, display_name, role, is_active)
-         VALUES ($1, $2, $3, $4, $5, $6)
+        `INSERT INTO users (id, username, password_hash, display_name, email, role, is_active)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)
          RETURNING ${COLS}`,
-        [id, username, passwordHash, displayName, role, isActive]
+        [id, username, passwordHash, displayName, email, role, isActive]
       );
-      const after = rowToObject(r.rows[0]);
+      await replaceTrustIds(c, id, role === 'admin' ? [] : trustIds);
+      const after = await decorate(r.rows[0], c);
       await logAudit(c, { table: 'users', recordId: id, action: 'create', after: safeSnapshot(after) });
       return after;
     });
@@ -45,15 +90,18 @@ export const userRepo = {
   async update(id, patch) {
     return tx(async (c) => {
       const cur = await c.query(`SELECT ${COLS} FROM users WHERE id = $1`, [id]);
-      const before = rowToObject(cur.rows[0]);
-      if (!before) return null;
+      const beforeRow = cur.rows[0];
+      if (!beforeRow) return null;
+      const beforeTrustIds = await loadTrustIds(c, id);
+      const before = { ...rowToObject(beforeRow), trustIds: beforeTrustIds };
       const r = await c.query(
         `UPDATE users SET
            username = $2,
            password_hash = $3,
            display_name = $4,
-           role = $5,
-           is_active = $6
+           email = $5,
+           role = $6,
+           is_active = $7
          WHERE id = $1
          RETURNING ${COLS}`,
         [
@@ -61,11 +109,15 @@ export const userRepo = {
           patch.username ?? before.username,
           patch.passwordHash ?? before.passwordHash,
           patch.displayName ?? before.displayName,
+          patch.email ?? before.email,
           patch.role ?? before.role,
           patch.isActive ?? before.isActive,
         ]
       );
-      const after = rowToObject(r.rows[0]);
+      const nextRole = patch.role ?? before.role;
+      const nextTrustIds = patch.trustIds !== undefined ? patch.trustIds : before.trustIds;
+      await replaceTrustIds(c, id, nextRole === 'admin' ? [] : nextTrustIds);
+      const after = await decorate(r.rows[0], c);
       await logAudit(c, {
         table: 'users', recordId: id, action: 'update',
         before: safeSnapshot(before), after: safeSnapshot(after),
@@ -76,8 +128,10 @@ export const userRepo = {
   async remove(id) {
     return tx(async (c) => {
       const cur = await c.query(`SELECT ${COLS} FROM users WHERE id = $1`, [id]);
-      const before = rowToObject(cur.rows[0]);
-      if (!before) return false;
+      const beforeRow = cur.rows[0];
+      if (!beforeRow) return false;
+      const beforeTrustIds = await loadTrustIds(c, id);
+      const before = { ...rowToObject(beforeRow), trustIds: beforeTrustIds };
       await c.query(`DELETE FROM users WHERE id = $1`, [id]);
       await logAudit(c, { table: 'users', recordId: id, action: 'delete', before: safeSnapshot(before) });
       return true;

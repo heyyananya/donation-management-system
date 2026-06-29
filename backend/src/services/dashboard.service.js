@@ -1,15 +1,27 @@
 import { donorRepo, trustRepo, receiptRepo } from '../repositories/index.js';
 
 export const dashboardService = {
-  async summary() {
-    const [donors, trusts, receipts, recentReceiptsRaw] = await Promise.all([
+  async summary({ allowedTrustIds = null } = {}) {
+    const allTrusts = await trustRepo.findAll();
+    const trusts = allowedTrustIds
+      ? allTrusts.filter((t) => allowedTrustIds.includes(t.id))
+      : allTrusts;
+
+    const receiptFilter = allowedTrustIds ? { trustIds: allowedTrustIds } : {};
+
+    const [donors, receipts, recentReceiptsRaw] = await Promise.all([
       donorRepo.findAll(),
-      trustRepo.findAll(),
-      receiptRepo.findAll(),
-      receiptRepo.recent(5),
+      receiptRepo.findAll(receiptFilter),
+      receiptRepo.recent(50), // pull more, then filter & slice
     ]);
+
+    const filteredRecent = (allowedTrustIds
+      ? recentReceiptsRaw.filter((r) => allowedTrustIds.includes(r.trustId))
+      : recentReceiptsRaw
+    ).slice(0, 5);
+
     const totalAmount = receipts.reduce((sum, r) => sum + Number(r.amount || 0), 0);
-    const recentReceipts = await Promise.all(recentReceiptsRaw.map(async (r) => {
+    const recentReceipts = await Promise.all(filteredRecent.map(async (r) => {
       const [donor, trust] = await Promise.all([
         donorRepo.findById(r.donorId),
         trustRepo.findById(r.trustId),

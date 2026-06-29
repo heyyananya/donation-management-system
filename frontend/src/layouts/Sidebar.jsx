@@ -7,9 +7,11 @@ import AccountBalanceIcon from '@mui/icons-material/AccountBalance';
 import LabelIcon from '@mui/icons-material/Label';
 import DateRangeIcon from '@mui/icons-material/DateRange';
 import VolunteerActivismIcon from '@mui/icons-material/VolunteerActivism';
+import AdminPanelSettingsIcon from '@mui/icons-material/AdminPanelSettings';
 import { motion } from 'framer-motion';
+import { useAuth } from '../auth/authContext.jsx';
 
-const items = [
+const baseItems = [
   { to: '/', label: 'Dashboard', icon: <DashboardIcon /> },
   { to: '/receipts', label: 'Donation Receipt', icon: <ReceiptLongIcon /> },
   { to: '/donors', label: 'Donor Master', icon: <PeopleIcon /> },
@@ -17,10 +19,15 @@ const items = [
   { to: '/remarks', label: 'Remark Master', icon: <LabelIcon /> },
   { to: '/years', label: 'Year Master', icon: <DateRangeIcon /> },
 ];
+const adminOnlyItems = [
+  { to: '/users', label: 'User Master', icon: <AdminPanelSettingsIcon /> },
+];
 
 export const SIDEBAR_WIDTH = 244;
 
 function SidebarContent({ onItemClick }) {
+  const { user } = useAuth();
+  const items = user?.role === 'admin' ? [...baseItems, ...adminOnlyItems] : baseItems;
   return (
     <>
       <Toolbar sx={{ gap: 1.2, px: 2.5 }}>

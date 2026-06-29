@@ -1,5 +1,6 @@
 import { Routes, Route, Navigate } from 'react-router-dom';
 import RequireAuth from '../auth/RequireAuth.jsx';
+import RequireAdmin from '../auth/RequireAdmin.jsx';
 import LoginPage from '../auth/LoginPage.jsx';
 import MainLayout from '../layouts/MainLayout.jsx';
 
@@ -12,6 +13,8 @@ import RemarkListPage from '../pages/remark/RemarkListPage.jsx';
 import YearListPage from '../pages/year/YearListPage.jsx';
 import ReceiptListPage from '../pages/receipt/ReceiptListPage.jsx';
 import ReceiptFormPage from '../pages/receipt/ReceiptFormPage.jsx';
+import UserListPage from '../pages/user/UserListPage.jsx';
+import UserFormPage from '../pages/user/UserFormPage.jsx';
 
 export default function App() {
   return (
@@ -30,6 +33,9 @@ export default function App() {
         <Route path="receipts" element={<ReceiptListPage />} />
         <Route path="receipts/new" element={<ReceiptFormPage />} />
         <Route path="receipts/:id/edit" element={<ReceiptFormPage />} />
+        <Route path="users" element={<RequireAdmin><UserListPage /></RequireAdmin>} />
+        <Route path="users/new" element={<RequireAdmin><UserFormPage /></RequireAdmin>} />
+        <Route path="users/:id/edit" element={<RequireAdmin><UserFormPage /></RequireAdmin>} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>

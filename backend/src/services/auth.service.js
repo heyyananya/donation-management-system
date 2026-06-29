@@ -23,6 +23,7 @@ export const authService = {
         username: user.username,
         role: user.role,
         displayName: user.displayName || user.username,
+        trustIds: user.trustIds || [],
       },
     };
   },
@@ -33,6 +34,7 @@ export const authService = {
       username: user?.username || username || '',
       role: user?.role || 'admin',
       displayName: user?.displayName || user?.username || 'Administrator',
+      trustIds: user?.trustIds || [],
     };
   },
 };
