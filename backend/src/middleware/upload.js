@@ -21,6 +21,18 @@ export const donorDocUpload = multer({
   limits: { fileSize: 8 * 1024 * 1024 },
 });
 
+// Donor creation requires at least one identity document up front (Aadhaar,
+// Voter ID, or PAN) — accepted as up to 3 optional files alongside the
+// donor's text fields in a single multipart request.
+export const donorCreateUpload = multer({
+  storage: makeStorage('donor-docs'),
+  limits: { fileSize: 8 * 1024 * 1024 },
+}).fields([
+  { name: 'aadhaarDoc', maxCount: 1 },
+  { name: 'voterIdDoc', maxCount: 1 },
+  { name: 'panDoc', maxCount: 1 },
+]);
+
 export const trustLogoUpload = multer({
   storage: makeStorage('trust-logos'),
   limits: { fileSize: 4 * 1024 * 1024 },

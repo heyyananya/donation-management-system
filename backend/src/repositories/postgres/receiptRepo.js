@@ -60,6 +60,7 @@ export const receiptRepo = {
       }
     }
     if (filters.donorId) { where.push(`donor_id = $${i++}`); vals.push(filters.donorId); }
+    if (filters.remarkId) { where.push(`remark_id = $${i++}`); vals.push(filters.remarkId); }
     if (filters.paymentType) { where.push(`payment_type = $${i++}`); vals.push(filters.paymentType); }
     if (filters.dateFrom) { where.push(`date >= $${i++}::date`); vals.push(filters.dateFrom); }
     if (filters.dateTo) { where.push(`date <= $${i++}::date`); vals.push(filters.dateTo); }

@@ -5,6 +5,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Box, Paper, Grid, TextField, Button, Stack, MenuItem, Typography, Autocomplete, Divider, InputAdornment, Chip,
 } from '@mui/material';
+import { DatePicker } from '@mui/x-date-pickers/DatePicker';
+import dayjs from 'dayjs';
 import SaveIcon from '@mui/icons-material/Save';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import { toast } from 'react-toastify';
@@ -35,6 +37,35 @@ const initial = {
 
 const CHEQUE = new Set(['Cheque', 'Demand Draft']);
 const ONLINE = new Set(['NEFT', 'RTGS', 'IMPS', 'UPI', 'Bank Transfer']);
+
+// Always renders/accepts dates as DD-MM-YYYY regardless of the OS/browser
+// locale — a native `<input type="date">` follows the system locale, which
+// this form must not do. Stores the underlying value as an ISO (YYYY-MM-DD)
+// string, matching what the backend expects.
+function FormDatePicker({ control, name, label, rules, errors }) {
+  return (
+    <Controller
+      name={name}
+      control={control}
+      rules={rules}
+      render={({ field }) => (
+        <DatePicker
+          label={label}
+          format="DD-MM-YYYY"
+          value={field.value ? dayjs(field.value) : null}
+          onChange={(v) => field.onChange(v && v.isValid() ? v.format('YYYY-MM-DD') : '')}
+          slotProps={{
+            textField: {
+              error: !!errors[name],
+              helperText: errors[name]?.message,
+              fullWidth: true,
+            },
+          }}
+        />
+      )}
+    />
+  );
+}
 
 export default function ReceiptFormPage() {
   const { id } = useParams();
@@ -246,8 +277,8 @@ export default function ReceiptFormPage() {
             />
           </Grid>
           <Grid item xs={12} md={3}>
-            <TextField label="Date *" type="date" InputLabelProps={{ shrink: true }} error={!!errors.date} helperText={errors.date?.message}
-              {...register('date', { required: 'Date is required' })} />
+            <FormDatePicker control={control} name="date" label="Date *" errors={errors}
+              rules={{ required: 'Date is required' }} />
           </Grid>
           <Grid item xs={12} md={3}>
             <TextField label="Amount *" type="number" inputProps={{ min: 1, step: 1 }} error={!!errors.amount} helperText={errors.amount?.message}
@@ -311,9 +342,8 @@ export default function ReceiptFormPage() {
                   error={!!errors.chequeNumber} helperText={errors.chequeNumber?.message} />
               </Grid>
               <Grid item xs={12} md={4}>
-                <TextField label="Cheque / DD Date *" type="date" InputLabelProps={{ shrink: true }}
-                  {...register('chequeDate', { required: 'Required' })}
-                  error={!!errors.chequeDate} helperText={errors.chequeDate?.message} />
+                <FormDatePicker control={control} name="chequeDate" label="Cheque / DD Date *" errors={errors}
+                  rules={{ required: 'Required' }} />
               </Grid>
               <Grid item xs={12} md={4}>
                 <TextField label="Bank Name *" {...register('bankName', { required: 'Required' })}
@@ -328,9 +358,8 @@ export default function ReceiptFormPage() {
                   error={!!errors.transactionNumber} helperText={errors.transactionNumber?.message} />
               </Grid>
               <Grid item xs={12} md={4}>
-                <TextField label="Transaction Date *" type="date" InputLabelProps={{ shrink: true }}
-                  {...register('transactionDate', { required: 'Required' })}
-                  error={!!errors.transactionDate} helperText={errors.transactionDate?.message} />
+                <FormDatePicker control={control} name="transactionDate" label="Transaction Date *" errors={errors}
+                  rules={{ required: 'Required' }} />
               </Grid>
               <Grid item xs={12} md={4}>
                 <TextField label="Bank Name *" {...register('bankName', { required: 'Required' })}

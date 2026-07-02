@@ -6,11 +6,15 @@ import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import VisibilityIcon from '@mui/icons-material/Visibility';
+import DownloadForOfflineIcon from '@mui/icons-material/DownloadForOffline';
+import dayjs from 'dayjs';
 import { toast } from 'react-toastify';
 import PageHeader from '../../components/feedback/PageHeader.jsx';
 import DataTable from '../../components/table/DataTable.jsx';
 import ConfirmDialog from '../../components/feedback/ConfirmDialog.jsx';
 import { donorApi } from '../../api/donor.api.js';
+import { exportToExcel } from '../../utils/exportExcel.js';
+import { docTypeLabel } from '../../constants/donorDocTypes.js';
 import DonorViewDialog from './DonorViewDialog.jsx';
 
 export default function DonorListPage() {
@@ -30,6 +34,7 @@ export default function DonorListPage() {
     { id: 'mobile', label: 'Mobile' },
     { id: 'pan', label: 'PAN' },
     { id: 'aadhaar', label: 'Aadhaar' },
+    { id: 'voterId', label: 'Voter ID' },
     { id: 'passport', label: 'Passport' },
     { id: 'address', label: 'Address', render: (r) => <Box sx={{ maxWidth: 280, whiteSpace: 'pre-wrap' }}>{r.address}</Box> },
     {
@@ -44,17 +49,41 @@ export default function DonorListPage() {
     },
   ];
 
+  const handleExport = () => {
+    exportToExcel(
+      donors,
+      [
+        { label: 'Name', value: (r) => r.name },
+        { label: 'Mobile', value: (r) => r.mobile },
+        { label: 'PAN', value: (r) => r.pan },
+        { label: 'Aadhaar', value: (r) => r.aadhaar },
+        { label: 'Voter ID', value: (r) => r.voterId },
+        { label: 'Passport', value: (r) => r.passport },
+        { label: 'Address', value: (r) => r.address },
+        { label: 'Documents Uploaded', value: (r) => (r.documents || []).map((d) => docTypeLabel(d.type)).join(', ') },
+      ],
+      `Donor-Master-${dayjs().format('DD-MM-YYYY')}.xlsx`
+    );
+  };
+
   return (
     <Box>
       <PageHeader
         title="Donor Master"
         subtitle="Manage donors, their identity documents, and addresses."
-        actions={<Button startIcon={<AddIcon />} variant="contained" onClick={() => nav('/donors/new')}>Add Donor</Button>}
+        actions={
+          <Stack direction="row" spacing={1.5}>
+            <Button variant="outlined" startIcon={<DownloadForOfflineIcon />} onClick={handleExport} disabled={!donors.length}>
+              Export Excel
+            </Button>
+            <Button startIcon={<AddIcon />} variant="contained" onClick={() => nav('/donors/new')}>Add Donor</Button>
+          </Stack>
+        }
       />
       <DataTable
         rows={donors}
         columns={columns}
-        searchKeys={['name', 'mobile', 'pan', 'aadhaar', 'passport', 'address']}
+        searchKeys={['name', 'mobile', 'pan', 'aadhaar', 'voterId', 'passport', 'address']}
         emptyMessage={isLoading ? 'Loading…' : 'No donors yet'}
       />
       <ConfirmDialog

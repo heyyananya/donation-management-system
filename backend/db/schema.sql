@@ -69,6 +69,7 @@ CREATE TABLE IF NOT EXISTS donors (
   mobile      VARCHAR(10) NOT NULL,
   pan         VARCHAR(10),
   aadhaar     VARCHAR(12),
+  voter_id    VARCHAR(20),
   passport    TEXT,
   address     TEXT,
   documents   JSONB       NOT NULL DEFAULT '[]'::jsonb,
@@ -80,6 +81,10 @@ CREATE TABLE IF NOT EXISTS donors (
 );
 CREATE INDEX IF NOT EXISTS donors_name_idx   ON donors (lower(name));
 CREATE INDEX IF NOT EXISTS donors_mobile_idx ON donors (mobile);
+
+-- For older installations created before Voter ID was added as a donor
+-- identity field.
+ALTER TABLE donors ADD COLUMN IF NOT EXISTS voter_id VARCHAR(20);
 
 -- ---------------------------------------------------------------------
 -- REMARK MASTER

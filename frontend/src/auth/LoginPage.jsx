@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
   Box, Paper, Stack, Typography, TextField, Button, InputAdornment, IconButton,
@@ -17,15 +17,15 @@ export default function LoginPage() {
   });
   const { login } = useAuth();
   const nav = useNavigate();
-  const loc = useLocation();
   const [showPass, setShowPass] = useState(false);
 
   const onSubmit = async (values) => {
     try {
       await login(values.username, values.password);
       toast.success('Welcome back');
-      const to = loc.state?.from?.pathname || '/';
-      nav(to, { replace: true });
+      // Always land on the Dashboard after login, even if the admin was
+      // redirected here from a deep link (e.g. /donors) while logged out.
+      nav('/', { replace: true });
     } catch (e) {
       toast.error(e?.response?.data?.message || 'Login failed');
     }

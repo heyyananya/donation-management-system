@@ -15,6 +15,7 @@ export const receiptRepo = {
         return filters.trustIds.includes(r.trustId);
       })
       .filter((r) => (filters.donorId ? r.donorId === filters.donorId : true))
+      .filter((r) => (filters.remarkId ? r.remarkId === filters.remarkId : true))
       .filter((r) => (filters.paymentType ? r.paymentType === filters.paymentType : true))
       .filter((r) => (filters.dateFrom ? r.date >= filters.dateFrom : true))
       .filter((r) => (filters.dateTo ? r.date <= filters.dateTo : true))

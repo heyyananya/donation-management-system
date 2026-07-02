@@ -1,4 +1,6 @@
-import { Dialog, DialogTitle, DialogContent, DialogActions, Button, Stack, Typography, Chip, Box, Link } from '@mui/material';
+import { Dialog, DialogTitle, DialogContent, DialogActions, Button, Stack, Typography, Chip, Box } from '@mui/material';
+import { docTypeLabel } from '../../constants/donorDocTypes.js';
+import { downloadDonorDoc } from '../../utils/downloadDonorDoc.js';
 
 function Field({ label, value }) {
   if (!value) return null;
@@ -20,6 +22,7 @@ export default function DonorViewDialog({ open, donor, onClose }) {
           <Field label="Mobile" value={donor.mobile} />
           <Field label="PAN" value={donor.pan} />
           <Field label="Aadhaar" value={donor.aadhaar} />
+          <Field label="Voter ID" value={donor.voterId} />
           <Field label="Passport" value={donor.passport} />
           <Field label="Address" value={donor.address} />
           {donor.documents?.length > 0 && (
@@ -29,12 +32,11 @@ export default function DonorViewDialog({ open, donor, onClose }) {
                 {donor.documents.map((d) => (
                   <Chip
                     key={d.id}
-                    label={`${d.type.toUpperCase()} · ${d.originalName}`}
-                    component={Link}
+                    label={`${docTypeLabel(d.type)} · ${d.originalName}`}
+                    title={d.originalName}
                     clickable
-                    href={d.url}
-                    target="_blank"
-                    rel="noopener"
+                    onClick={() => downloadDonorDoc(d)}
+                    sx={{ maxWidth: 320 }}
                   />
                 ))}
               </Stack>

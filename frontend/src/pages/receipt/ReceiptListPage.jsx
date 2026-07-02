@@ -15,6 +15,8 @@ import FavoriteIcon from '@mui/icons-material/Favorite';
 import PrintIcon from '@mui/icons-material/Print';
 import DownloadIcon from '@mui/icons-material/Download';
 import VisibilityIcon from '@mui/icons-material/Visibility';
+import DownloadForOfflineIcon from '@mui/icons-material/DownloadForOffline';
+import dayjs from 'dayjs';
 import { toast } from 'react-toastify';
 import PageHeader from '../../components/feedback/PageHeader.jsx';
 import DataTable from '../../components/table/DataTable.jsx';
@@ -23,14 +25,21 @@ import { receiptApi } from '../../api/receipt.api.js';
 import { trustApi } from '../../api/trust.api.js';
 import { pdfApi } from '../../api/pdf.api.js';
 import { yearApi } from '../../api/year.api.js';
+import { remarkApi } from '../../api/remark.api.js';
 import { downloadBlob, openBlobInNewTab } from '../../utils/downloadBlob.js';
+import { exportToExcel } from '../../utils/exportExcel.js';
+
+const formatDate = (d) => (d ? dayjs(d).format('DD-MM-YYYY') : '');
+
+const EMPTY_FILTERS = { financialYear: '', trustId: '', paymentType: '', remarkId: '' };
 
 export default function ReceiptListPage() {
   const nav = useNavigate();
   const qc = useQueryClient();
-  const [filters, setFilters] = useState({ financialYear: '', trustId: '', paymentType: '' });
+  const [filters, setFilters] = useState(EMPTY_FILTERS);
   const { data: trusts = [] } = useQuery({ queryKey: ['trusts'], queryFn: trustApi.list });
   const { data: years = [] } = useQuery({ queryKey: ['years'], queryFn: yearApi.list });
+  const { data: remarks = [] } = useQuery({ queryKey: ['remarks'], queryFn: remarkApi.list });
   const { data: meta } = useQuery({ queryKey: ['receipts', 'meta'], queryFn: receiptApi.meta });
   const { data: receipts = [], isLoading } = useQuery({
     queryKey: ['receipts', filters],
@@ -50,7 +59,7 @@ export default function ReceiptListPage() {
   const columns = [
     { id: 'financialYear', label: 'FY', render: (r) => <Chip size="small" label={r.financialYear} /> },
     { id: 'number', label: 'Receipt #', render: (r) => <Box sx={{ fontWeight: 700 }}>{r.number}</Box> },
-    { id: 'date', label: 'Date' },
+    { id: 'date', label: 'Date', render: (r) => formatDate(r.date) },
     { id: 'trustName', label: 'Trust' },
     { id: 'donorName', label: 'Donor' },
     { id: 'donorMobile', label: 'Mobile' },
@@ -63,12 +72,37 @@ export default function ReceiptListPage() {
     },
   ];
 
+  const handleExport = () => {
+    exportToExcel(
+      receipts,
+      [
+        { label: 'Financial Year', value: (r) => r.financialYear },
+        { label: 'Receipt #', value: (r) => r.number },
+        { label: 'Date', value: (r) => formatDate(r.date) },
+        { label: 'Trust', value: (r) => r.trustName },
+        { label: 'Donor', value: (r) => r.donorName },
+        { label: 'Mobile', value: (r) => r.donorMobile },
+        { label: 'Amount', value: (r) => r.amount },
+        { label: 'Payment Type', value: (r) => r.paymentType },
+        { label: 'Remark', value: (r) => r.remarkName },
+      ],
+      `Donation-Receipts-${dayjs().format('DD-MM-YYYY')}.xlsx`
+    );
+  };
+
   return (
     <Box>
       <PageHeader
         title="Donation Receipts"
         subtitle="Issue receipts and generate official documents."
-        actions={<Button variant="contained" startIcon={<AddIcon />} onClick={() => nav('/receipts/new')}>New Receipt</Button>}
+        actions={
+          <Stack direction="row" spacing={1.5}>
+            <Button variant="outlined" startIcon={<DownloadForOfflineIcon />} onClick={handleExport} disabled={!receipts.length}>
+              Export Excel
+            </Button>
+            <Button variant="contained" startIcon={<AddIcon />} onClick={() => nav('/receipts/new')}>New Receipt</Button>
+          </Stack>
+        }
       />
       <Paper sx={{ p: 2, mb: 2, borderRadius: 3 }}>
         <Grid container spacing={1.5}>
@@ -93,8 +127,14 @@ export default function ReceiptListPage() {
               {(meta?.paymentTypes || []).map((p) => <MenuItem key={p} value={p}>{p}</MenuItem>)}
             </TextField>
           </Grid>
+          <Grid item xs={12} sm={4} md={3}>
+            <TextField select label="Remark" size="small" fullWidth value={filters.remarkId} onChange={(e) => setFilters((f) => ({ ...f, remarkId: e.target.value }))}>
+              <MenuItem value="">All</MenuItem>
+              {remarks.map((r) => <MenuItem key={r.id} value={r.id}>{r.name}</MenuItem>)}
+            </TextField>
+          </Grid>
           <Grid item xs={12} md={3} sx={{ display: 'flex', alignItems: 'center' }}>
-            <Button onClick={() => setFilters({ financialYear: '', trustId: '', paymentType: '' })}>Clear filters</Button>
+            <Button onClick={() => setFilters(EMPTY_FILTERS)}>Clear filters</Button>
           </Grid>
         </Grid>
       </Paper>
