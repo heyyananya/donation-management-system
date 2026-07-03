@@ -29,8 +29,10 @@ CREATE TABLE IF NOT EXISTS trusts (
   address                TEXT,
   correspondence_address TEXT,
   logo_file_name         TEXT,
+  is_status              INTEGER     NOT NULL DEFAULT 1,
   created_at             TIMESTAMPTZ NOT NULL DEFAULT now(),
-  updated_at             TIMESTAMPTZ NOT NULL DEFAULT now()
+  updated_at             TIMESTAMPTZ NOT NULL DEFAULT now(),
+  deleted_at             TIMESTAMPTZ
 );
 CREATE INDEX IF NOT EXISTS trusts_name_idx ON trusts (lower(name));
 
@@ -73,8 +75,10 @@ CREATE TABLE IF NOT EXISTS donors (
   passport    TEXT,
   address     TEXT,
   documents   JSONB       NOT NULL DEFAULT '[]'::jsonb,
+  is_status   INTEGER     NOT NULL DEFAULT 1,
   created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+  deleted_at  TIMESTAMPTZ,
   CONSTRAINT donors_mobile_format  CHECK (mobile ~ '^[0-9]{10}$'),
   CONSTRAINT donors_pan_format     CHECK (pan IS NULL OR pan ~ '^[A-Z]{5}[0-9]{4}[A-Z]$'),
   CONSTRAINT donors_aadhaar_format CHECK (aadhaar IS NULL OR aadhaar ~ '^[0-9]{12}$')
@@ -86,18 +90,38 @@ CREATE INDEX IF NOT EXISTS donors_mobile_idx ON donors (mobile);
 -- identity field.
 ALTER TABLE donors ADD COLUMN IF NOT EXISTS voter_id VARCHAR(20);
 
+-- Soft delete: records are hidden (deleted_at set) instead of physically
+-- removed, so nothing is ever permanently destroyed. Added to every master.
+ALTER TABLE donors ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;
+ALTER TABLE trusts ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;
+ALTER TABLE donors ADD COLUMN IF NOT EXISTS is_status INTEGER NOT NULL DEFAULT 1;
+ALTER TABLE trusts ADD COLUMN IF NOT EXISTS is_status INTEGER NOT NULL DEFAULT 1;
+
 -- ---------------------------------------------------------------------
 -- REMARK MASTER
 -- ---------------------------------------------------------------------
+-- name uniqueness is enforced by a *partial* unique index (below) that ignores
+-- soft-deleted rows, so a name can be reused after its remark is deleted.
 CREATE TABLE IF NOT EXISTS remarks (
   id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  name        TEXT        NOT NULL UNIQUE,
+  name        TEXT        NOT NULL,
+  is_status   INTEGER     NOT NULL DEFAULT 1,
   created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
-  updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+  updated_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+  deleted_at  TIMESTAMPTZ
 );
+-- Existing installs: drop the old table-wide UNIQUE, add the soft-delete column
+-- and a partial unique index in its place.
+ALTER TABLE remarks DROP CONSTRAINT IF EXISTS remarks_name_key;
+ALTER TABLE remarks ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;
+ALTER TABLE remarks ADD COLUMN IF NOT EXISTS is_status INTEGER NOT NULL DEFAULT 1;
+CREATE UNIQUE INDEX IF NOT EXISTS remarks_name_active_idx ON remarks (name) WHERE deleted_at IS NULL;
 
 -- ---------------------------------------------------------------------
 -- YEAR MASTER
+-- name keeps a full UNIQUE constraint because receipts.financial_year has a
+-- foreign key to it (an FK target cannot be a partial index). Re-creating a
+-- soft-deleted year name revives the existing row instead (see yearRepo).
 -- ---------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS years (
   id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -105,11 +129,15 @@ CREATE TABLE IF NOT EXISTS years (
   start_date  DATE        NOT NULL,
   end_date    DATE        NOT NULL,
   is_active   BOOLEAN     NOT NULL DEFAULT TRUE,
+  is_status   INTEGER     NOT NULL DEFAULT 1,
   created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+  deleted_at  TIMESTAMPTZ,
   CONSTRAINT years_name_format CHECK (name ~ '^[0-9]{4}-[0-9]{2}$'),
   CONSTRAINT years_date_order  CHECK (start_date < end_date)
 );
+ALTER TABLE years ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;
+ALTER TABLE years ADD COLUMN IF NOT EXISTS is_status INTEGER NOT NULL DEFAULT 1;
 
 -- ---------------------------------------------------------------------
 -- DONATION RECEIPT
@@ -133,17 +161,23 @@ CREATE TABLE IF NOT EXISTS receipts (
   bank_name           TEXT,
   transaction_number  TEXT,
   transaction_date    DATE,
+  is_status           INTEGER        NOT NULL DEFAULT 1,
   created_at          TIMESTAMPTZ    NOT NULL DEFAULT now(),
   updated_at          TIMESTAMPTZ    NOT NULL DEFAULT now(),
+  deleted_at          TIMESTAMPTZ,
   CONSTRAINT receipts_amount_positive  CHECK (amount > 0),
   CONSTRAINT receipts_number_positive  CHECK (number > 0),
   CONSTRAINT receipts_payment_type_ok  CHECK (payment_type IN ('Cash','Cheque','NEFT','RTGS','IMPS','UPI','Bank Transfer','Demand Draft')),
+  -- Note: soft-deleted receipts keep their sequence number reserved (numbers
+  -- are never reused), so this stays a full UNIQUE constraint.
   CONSTRAINT receipts_unique_sequence  UNIQUE (financial_year, trust_id, number)
 );
 CREATE INDEX IF NOT EXISTS receipts_donor_idx ON receipts (donor_id);
 CREATE INDEX IF NOT EXISTS receipts_trust_idx ON receipts (trust_id);
 CREATE INDEX IF NOT EXISTS receipts_year_idx  ON receipts (financial_year);
 CREATE INDEX IF NOT EXISTS receipts_date_idx  ON receipts (date DESC);
+ALTER TABLE receipts ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;
+ALTER TABLE receipts ADD COLUMN IF NOT EXISTS is_status INTEGER NOT NULL DEFAULT 1;
 
 -- ---------------------------------------------------------------------
 -- USERS (logins)
@@ -155,19 +189,29 @@ CREATE INDEX IF NOT EXISTS receipts_date_idx  ON receipts (date DESC);
 -- a regular operator whose trust visibility is gated by the `user_trusts`
 -- join below.
 -- ---------------------------------------------------------------------
+-- username uniqueness is a *partial* unique index (below) so a username can be
+-- reused after a user is soft-deleted.
 CREATE TABLE IF NOT EXISTS users (
   id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  username      TEXT        NOT NULL UNIQUE,
+  username      TEXT        NOT NULL,
   password_hash TEXT        NOT NULL,
   display_name  TEXT,
   email         TEXT,
   role          TEXT        NOT NULL DEFAULT 'admin',
   is_active     BOOLEAN     NOT NULL DEFAULT TRUE,
+  is_status     INTEGER     NOT NULL DEFAULT 1,
   created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+  deleted_at    TIMESTAMPTZ,
   CONSTRAINT users_role_ok CHECK (role IN ('admin','user'))
 );
 CREATE INDEX IF NOT EXISTS users_username_idx ON users (lower(username));
+-- Existing installs: drop the old table-wide UNIQUE, add soft-delete column and
+-- a partial unique index (case-insensitive) that ignores soft-deleted rows.
+ALTER TABLE users DROP CONSTRAINT IF EXISTS users_username_key;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS is_status INTEGER NOT NULL DEFAULT 1;
+CREATE UNIQUE INDEX IF NOT EXISTS users_username_active_idx ON users (lower(username)) WHERE deleted_at IS NULL;
 
 -- Older installations may still have the legacy single-value role check.
 ALTER TABLE users DROP CONSTRAINT IF EXISTS users_role_ok;

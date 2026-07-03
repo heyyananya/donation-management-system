@@ -4,7 +4,7 @@ import { rowToObject } from './_mapper.js';
 import { logAudit } from './_audit.js';
 
 const COLS = `id, name, mobile, pan, aadhaar, voter_id, passport, address, documents,
-              created_at, updated_at`;
+              created_at, updated_at, is_status`;
 
 function decode(row) {
   if (!row) return null;
@@ -16,11 +16,11 @@ function decode(row) {
 
 export const donorRepo = {
   async findAll() {
-    const r = await q(`SELECT ${COLS} FROM donors ORDER BY lower(name)`);
+    const r = await q(`SELECT ${COLS} FROM donors WHERE deleted_at IS NULL AND is_status = 1 ORDER BY lower(name)`);
     return r.rows.map(decode);
   },
   async findById(id) {
-    const r = await q(`SELECT ${COLS} FROM donors WHERE id = $1`, [id]);
+    const r = await q(`SELECT ${COLS} FROM donors WHERE id = $1 AND deleted_at IS NULL AND is_status = 1`, [id]);
     return decode(r.rows[0]);
   },
   async search(term) {
@@ -28,13 +28,14 @@ export const donorRepo = {
     const t = `%${term.toLowerCase()}%`;
     const r = await q(
       `SELECT ${COLS} FROM donors
-       WHERE lower(name) LIKE $1
+       WHERE deleted_at IS NULL AND is_status = 1
+         AND (lower(name) LIKE $1
           OR mobile LIKE $1
           OR lower(coalesce(pan,'')) LIKE $1
           OR coalesce(aadhaar,'') LIKE $1
           OR lower(coalesce(voter_id,'')) LIKE $1
           OR lower(coalesce(passport,'')) LIKE $1
-          OR lower(coalesce(address,'')) LIKE $1
+          OR lower(coalesce(address,'')) LIKE $1)
        ORDER BY lower(name)`,
       [t]
     );
@@ -91,12 +92,13 @@ export const donorRepo = {
       return after;
     });
   },
+  // Soft delete — stamps deleted_at so the row is hidden but preserved.
   async remove(id) {
     return tx(async (c) => {
-      const cur = await c.query(`SELECT ${COLS} FROM donors WHERE id = $1`, [id]);
+      const cur = await c.query(`SELECT ${COLS} FROM donors WHERE id = $1 AND deleted_at IS NULL AND is_status = 1`, [id]);
       const before = decode(cur.rows[0]);
       if (!before) return false;
-      await c.query(`DELETE FROM donors WHERE id = $1`, [id]);
+      await c.query(`UPDATE donors SET deleted_at = now(), is_status = 0 WHERE id = $1`, [id]);
       await logAudit(c, { table: 'donors', recordId: id, action: 'delete', before });
       return true;
     });
@@ -108,7 +110,7 @@ export const donorRepo = {
   // one write clobbering the other's document.
   async appendDocument(id, doc) {
     return tx(async (c) => {
-      const cur = await c.query(`SELECT ${COLS} FROM donors WHERE id = $1 FOR UPDATE`, [id]);
+      const cur = await c.query(`SELECT ${COLS} FROM donors WHERE id = $1 AND deleted_at IS NULL AND is_status = 1 FOR UPDATE`, [id]);
       const before = decode(cur.rows[0]);
       if (!before) return null;
       const documents = [...(before.documents || []), doc];
@@ -123,7 +125,7 @@ export const donorRepo = {
   },
   async removeDocumentById(id, docId) {
     return tx(async (c) => {
-      const cur = await c.query(`SELECT ${COLS} FROM donors WHERE id = $1 FOR UPDATE`, [id]);
+      const cur = await c.query(`SELECT ${COLS} FROM donors WHERE id = $1 AND deleted_at IS NULL AND is_status = 1 FOR UPDATE`, [id]);
       const before = decode(cur.rows[0]);
       if (!before) return null;
       const documents = (before.documents || []).filter((x) => x.id !== docId);

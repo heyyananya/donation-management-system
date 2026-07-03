@@ -6,7 +6,7 @@ import { logAudit } from './_audit.js';
 const COLS = `id, financial_year, trust_id, donor_id, remark_id, number, date,
               amount, payment_type, remarks, cheque_number, cheque_date,
               bank_name, transaction_number, transaction_date,
-              created_at, updated_at`;
+              created_at, updated_at, is_status`;
 
 function decode(row) {
   if (!row) return null;
@@ -45,7 +45,8 @@ const UPDATE_SQL = `
 
 export const receiptRepo = {
   async findAll(filters = {}) {
-    const where = [];
+    // Soft-deleted receipts are hidden from every listing.
+    const where = ['deleted_at IS NULL AND is_status = 1'];
     const vals = [];
     let i = 1;
     if (filters.financialYear) { where.push(`financial_year = $${i++}`); vals.push(filters.financialYear); }
@@ -69,10 +70,12 @@ export const receiptRepo = {
     return r.rows.map(decode);
   },
   async findById(id) {
-    const r = await q(`SELECT ${COLS} FROM receipts WHERE id = $1`, [id]);
+    const r = await q(`SELECT ${COLS} FROM receipts WHERE id = $1 AND deleted_at IS NULL AND is_status = 1`, [id]);
     return decode(r.rows[0]);
   },
   async findMaxNumber(fy, trustId) {
+    // Intentionally counts soft-deleted receipts too — a deleted receipt's
+    // number stays reserved so numbers are never reused.
     const r = await q(
       `SELECT COALESCE(MAX(number), 0) AS max FROM receipts WHERE financial_year = $1 AND trust_id = $2`,
       [fy, trustId]
@@ -115,22 +118,23 @@ export const receiptRepo = {
       return after;
     });
   },
+  // Soft delete — stamps deleted_at so the row is hidden but preserved.
   async remove(id) {
     return tx(async (c) => {
-      const cur = await c.query(`SELECT ${COLS} FROM receipts WHERE id = $1`, [id]);
+      const cur = await c.query(`SELECT ${COLS} FROM receipts WHERE id = $1 AND deleted_at IS NULL AND is_status = 1`, [id]);
       const before = decode(cur.rows[0]);
       if (!before) return false;
-      await c.query(`DELETE FROM receipts WHERE id = $1`, [id]);
+      await c.query(`UPDATE receipts SET deleted_at = now(), is_status = 0 WHERE id = $1`, [id]);
       await logAudit(c, { table: 'receipts', recordId: id, action: 'delete', before });
       return true;
     });
   },
   async countAll() {
-    const r = await q(`SELECT COUNT(*)::int AS n FROM receipts`);
+    const r = await q(`SELECT COUNT(*)::int AS n FROM receipts WHERE deleted_at IS NULL AND is_status = 1`);
     return r.rows[0].n;
   },
   async recent(limit = 5) {
-    const r = await q(`SELECT ${COLS} FROM receipts ORDER BY created_at DESC LIMIT $1`, [limit]);
+    const r = await q(`SELECT ${COLS} FROM receipts WHERE deleted_at IS NULL AND is_status = 1 ORDER BY created_at DESC LIMIT $1`, [limit]);
     return r.rows.map(decode);
   },
 };

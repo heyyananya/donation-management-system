@@ -123,7 +123,7 @@ export default function UserListPage() {
       <ConfirmDialog
         open={!!toDelete}
         title="Delete User"
-        message={`Delete "${toDelete?.username}"? This cannot be undone.`}
+        message={`Delete "${toDelete?.username}"? They will be hidden and can no longer log in, but kept in records.`}
         confirmText="Delete"
         danger
         onClose={() => setToDelete(null)}

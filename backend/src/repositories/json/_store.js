@@ -34,15 +34,24 @@ function persist(collection) {
   fs.renameSync(tmp, p);
 }
 
+// Soft delete: a row with `deletedAt` set is treated as gone by the default
+// reads (all/find/filter). Physical rows are never removed.
+const isLive = (row) => !row.deletedAt;
+
 export const store = {
   all(collection) {
+    return load(collection).filter(isLive);
+  },
+  // Includes soft-deleted rows — used where reserved values must survive
+  // deletion (e.g. receipt sequence numbers must never be reused).
+  allWithDeleted(collection) {
     return [...load(collection)];
   },
   find(collection, predicate) {
-    return load(collection).find(predicate);
+    return load(collection).find((row) => isLive(row) && predicate(row));
   },
   filter(collection, predicate) {
-    return load(collection).filter(predicate);
+    return load(collection).filter((row) => isLive(row) && predicate(row));
   },
   insert(collection, item) {
     const data = load(collection);
@@ -58,11 +67,13 @@ export const store = {
     persist(collection);
     return data[idx];
   },
+  // Soft delete — stamps deletedAt instead of physically removing the row.
   remove(collection, id) {
     const data = load(collection);
     const idx = data.findIndex((row) => row.id === id);
     if (idx === -1) return false;
-    data.splice(idx, 1);
+    const now = new Date().toISOString();
+    data[idx] = { ...data[idx], deletedAt: now, updatedAt: now };
     persist(collection);
     return true;
   },

@@ -5,7 +5,7 @@ import { logAudit } from './_audit.js';
 
 const COLS = `id, name, trust_type, area, taluka, district, sanchalan,
               establish_date, contact_number, address, correspondence_address,
-              logo_file_name, created_at, updated_at`;
+              logo_file_name, created_at, updated_at, is_status`;
 
 function decode(row) {
   if (!row) return null;
@@ -64,11 +64,11 @@ const UPDATE_SQL = `
 
 export const trustRepo = {
   async findAll() {
-    const r = await q(`SELECT ${COLS} FROM trusts ORDER BY lower(name)`);
+    const r = await q(`SELECT ${COLS} FROM trusts WHERE deleted_at IS NULL AND is_status = 1 ORDER BY lower(name)`);
     return r.rows.map(decode);
   },
   async findById(id) {
-    const r = await q(`SELECT ${COLS} FROM trusts WHERE id = $1`, [id]);
+    const r = await q(`SELECT ${COLS} FROM trusts WHERE id = $1 AND deleted_at IS NULL AND is_status = 1`, [id]);
     return decode(r.rows[0]);
   },
   async create(data) {
@@ -93,12 +93,13 @@ export const trustRepo = {
       return after;
     });
   },
+  // Soft delete — stamps deleted_at so the row is hidden but preserved.
   async remove(id) {
     return tx(async (c) => {
-      const cur = await c.query(`SELECT ${COLS} FROM trusts WHERE id = $1`, [id]);
+      const cur = await c.query(`SELECT ${COLS} FROM trusts WHERE id = $1 AND deleted_at IS NULL AND is_status = 1`, [id]);
       const before = decode(cur.rows[0]);
       if (!before) return false;
-      await c.query(`DELETE FROM trusts WHERE id = $1`, [id]);
+      await c.query(`UPDATE trusts SET deleted_at = now(), is_status = 0 WHERE id = $1`, [id]);
       await logAudit(c, { table: 'trusts', recordId: id, action: 'delete', before });
       return true;
     });

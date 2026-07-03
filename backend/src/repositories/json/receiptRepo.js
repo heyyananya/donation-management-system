@@ -23,7 +23,10 @@ export const receiptRepo = {
   },
   findById: (id) => store.find(C, (r) => r.id === id) || null,
   findMaxNumber: (fy, trustId) => {
-    const rows = store.filter(C, (r) => r.financialYear === fy && r.trustId === trustId);
+    // Include soft-deleted receipts so sequence numbers are never reused.
+    const rows = store
+      .allWithDeleted(C)
+      .filter((r) => r.financialYear === fy && r.trustId === trustId);
     return rows.reduce((m, r) => Math.max(m, r.number || 0), 0);
   },
   create: (data) => {

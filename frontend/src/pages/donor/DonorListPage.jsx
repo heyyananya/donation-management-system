@@ -89,7 +89,7 @@ export default function DonorListPage() {
       <ConfirmDialog
         open={!!toDelete}
         title="Delete Donor"
-        message={`Delete "${toDelete?.name}"? This cannot be undone.`}
+        message={`Delete "${toDelete?.name}"? It will be hidden from the list but kept in records.`}
         confirmText="Delete"
         danger
         onClose={() => setToDelete(null)}

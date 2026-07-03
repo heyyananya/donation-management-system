@@ -1,4 +1,4 @@
-import { donorRepo } from '../repositories/index.js';
+import { donorRepo, receiptRepo } from '../repositories/index.js';
 import { AppError } from '../middleware/error.js';
 import {
   assertString,
@@ -56,6 +56,11 @@ export const donorService = {
   },
   remove: async (id) => {
     if (!(await donorRepo.findById(id))) throw new AppError('Donor not found', 404);
+    // Mirror the trust/year rule: a donor referenced by receipts cannot be
+    // deleted. This also guarantees existing receipts always resolve the donor
+    // name (decoration never encounters a soft-deleted donor).
+    const used = await receiptRepo.findAll({ donorId: id });
+    if (used.length) throw new AppError('Donor has receipts and cannot be deleted', 400);
     await donorRepo.remove(id);
   },
   attachDocument: async (id, doc) => {
