@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Button, IconButton, Stack, Tooltip, Box } from '@mui/material';
+import { Button, IconButton, Stack, Tooltip, Box, Chip } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
@@ -13,6 +13,7 @@ import PageHeader from '../../components/feedback/PageHeader.jsx';
 import DataTable from '../../components/table/DataTable.jsx';
 import ConfirmDialog from '../../components/feedback/ConfirmDialog.jsx';
 import { donorApi } from '../../api/donor.api.js';
+import { trustApi } from '../../api/trust.api.js';
 import { exportToExcel } from '../../utils/exportExcel.js';
 import { docTypeLabel } from '../../constants/donorDocTypes.js';
 import DonorViewDialog from './DonorViewDialog.jsx';
@@ -21,6 +22,8 @@ export default function DonorListPage() {
   const nav = useNavigate();
   const qc = useQueryClient();
   const { data: donors = [], isLoading } = useQuery({ queryKey: ['donors'], queryFn: () => donorApi.list() });
+  const { data: trusts = [] } = useQuery({ queryKey: ['trusts'], queryFn: trustApi.list });
+  const trustNameById = new Map(trusts.map((t) => [t.id, t.name]));
   const [toDelete, setToDelete] = useState(null);
   const [toView, setToView] = useState(null);
 
@@ -37,6 +40,22 @@ export default function DonorListPage() {
     { id: 'voterId', label: 'Voter ID' },
     { id: 'passport', label: 'Passport' },
     { id: 'address', label: 'Address', render: (r) => <Box sx={{ maxWidth: 280, whiteSpace: 'pre-wrap' }}>{r.address}</Box> },
+    {
+      id: 'trustIds',
+      label: 'Trusts',
+      sortable: false,
+      render: (r) => {
+        const ids = r.trustIds || [];
+        if (!ids.length) return <Box sx={{ color: 'warning.main', fontSize: 13 }}>None</Box>;
+        return (
+          <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap sx={{ maxWidth: 260 }}>
+            {ids.map((id) => (
+              <Chip key={id} size="small" variant="outlined" label={trustNameById.get(id) || '—'} />
+            ))}
+          </Stack>
+        );
+      },
+    },
     {
       id: '_actions', label: 'Actions', sortable: false, align: 'right',
       render: (r) => (
@@ -60,6 +79,7 @@ export default function DonorListPage() {
         { label: 'Voter ID', value: (r) => r.voterId },
         { label: 'Passport', value: (r) => r.passport },
         { label: 'Address', value: (r) => r.address },
+        { label: 'Trusts', value: (r) => (r.trustIds || []).map((id) => trustNameById.get(id) || '').filter(Boolean).join(', ') },
         { label: 'Documents Uploaded', value: (r) => (r.documents || []).map((d) => docTypeLabel(d.type)).join(', ') },
       ],
       `Donor-Master-${dayjs().format('DD-MM-YYYY')}.xlsx`

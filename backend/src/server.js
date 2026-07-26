@@ -44,7 +44,7 @@ app.use(
 );
 
 // Authenticated API.
-app.use('/api/donors', authMiddleware, donorRoutes);
+app.use('/api/donors', authMiddleware, attachTrustScope, donorRoutes);
 app.use('/api/trusts', authMiddleware, attachTrustScope, trustRoutes);
 app.use('/api/remarks', authMiddleware, remarkRoutes);
 app.use('/api/receipts', authMiddleware, attachTrustScope, receiptRoutes);

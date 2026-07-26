@@ -38,7 +38,14 @@ async function sanitize(input, { allowNumber = false } = {}) {
   if (!(await trustRepo.findById(trustId))) throw new AppError('Trust not found', 400);
 
   const donorId = assertString(input.donorId, 'Donor', { required: true });
-  if (!(await donorRepo.findById(donorId))) throw new AppError('Donor not found', 400);
+  const donor = await donorRepo.findById(donorId);
+  if (!donor) throw new AppError('Donor not found', 400);
+  // The donor must be linked to the receipt's trust — otherwise a scoped user
+  // could POST a receipt that attaches a donor from a trust they can see to a
+  // trust the donor is not registered under.
+  if (Array.isArray(donor.trustIds) && donor.trustIds.length && !donor.trustIds.includes(trustId)) {
+    throw new AppError('Selected donor is not registered for this trust', 400);
+  }
 
   const date = assertDate(input.date, 'Date', { required: true });
   const amount = assertAmount(input.amount, 'Amount');

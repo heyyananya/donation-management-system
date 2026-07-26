@@ -75,7 +75,6 @@ export default function ReceiptFormPage() {
 
   const { data: meta } = useQuery({ queryKey: ['receipts', 'meta'], queryFn: receiptApi.meta });
   const { data: trusts = [] } = useQuery({ queryKey: ['trusts'], queryFn: trustApi.list });
-  const { data: donors = [] } = useQuery({ queryKey: ['donors'], queryFn: () => donorApi.list() });
   const { data: remarks = [] } = useQuery({ queryKey: ['remarks'], queryFn: remarkApi.list });
   const { data: years = [] } = useQuery({ queryKey: ['years'], queryFn: yearApi.list });
   const { data: existing } = useQuery({ queryKey: ['receipt', id], queryFn: () => receiptApi.get(id), enabled: isEdit });
@@ -104,6 +103,16 @@ export default function ReceiptFormPage() {
   const watched = useWatch({ control });
   const showCheque = CHEQUE.has(watched.paymentType);
   const showOnline = ONLINE.has(watched.paymentType);
+
+  // Donors dropdown scopes to the chosen trust. Refetches when trustId changes.
+  // On the edit page the trust is locked, so we use the existing receipt's
+  // trustId as the fallback.
+  const effectiveTrustId = isEdit ? existing?.trustId : watched.trustId;
+  const { data: donors = [] } = useQuery({
+    queryKey: ['donors', { trustId: effectiveTrustId || null }],
+    queryFn: () => donorApi.list({ trustId: effectiveTrustId || undefined }),
+    enabled: !!effectiveTrustId,
+  });
 
   // Peek next receipt number live as FY/trust change (only for new receipts).
   const { data: peek } = useQuery({
@@ -140,6 +149,16 @@ export default function ReceiptFormPage() {
     if (fyOptions.length) setValue('financialYear', fyOptions[0]);
     else setValue('financialYear', '');
   }, [fyOptions, isEdit, setValue, watched?.financialYear]);
+
+  // When the trust changes on a new receipt, clear the donor selection —
+  // the previous donor may not belong to the newly-selected trust.
+  useEffect(() => {
+    if (isEdit) return;
+    if (!watched?.donorId) return;
+    if (!donors.some((d) => d.id === watched.donorId)) {
+      setValue('donorId', '');
+    }
+  }, [donors, isEdit, setValue, watched?.donorId]);
   void meta;
 
   return (
@@ -252,6 +271,7 @@ export default function ReceiptFormPage() {
                     ? { id: field.value, name: existing.donorName, mobile: existing.donorMobile || '' }
                     : null;
                 const value = matched || fallback;
+                const noTrustPicked = !effectiveTrustId;
                 return (
                   <Autocomplete
                     options={donors}
@@ -259,7 +279,12 @@ export default function ReceiptFormPage() {
                     isOptionEqualToValue={(a, b) => a.id === b.id}
                     value={value}
                     onChange={(_e, v) => field.onChange(v?.id || '')}
-                    loading={!donors.length}
+                    disabled={noTrustPicked}
+                    noOptionsText={
+                      noTrustPicked
+                        ? 'Select a trust first'
+                        : 'No donors registered for this trust'
+                    }
                     renderInput={(params) => (
                       <TextField
                         {...params}
@@ -267,7 +292,9 @@ export default function ReceiptFormPage() {
                         error={!!errors.donorId}
                         helperText={
                           errors.donorId?.message ||
-                          (matched?.pan ? `PAN: ${matched.pan}` : '')
+                          (noTrustPicked
+                            ? 'Pick a trust above to see its donors'
+                            : (matched?.pan ? `PAN: ${matched.pan}` : ''))
                         }
                       />
                     )}

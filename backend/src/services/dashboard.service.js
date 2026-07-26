@@ -9,10 +9,15 @@ export const dashboardService = {
 
     const receiptFilter = allowedTrustIds ? { trustIds: allowedTrustIds } : {};
 
+    // Donors are scoped the same way trusts are — a user only ever sees the
+    // donors linked to at least one of their allowed trusts. Admins pass
+    // trustIds: null → repo returns everything.
+    const donorScope = allowedTrustIds ? { trustIds: allowedTrustIds } : {};
+
     const [donors, receipts, recentReceiptsRaw] = await Promise.all([
-      donorRepo.findAll(),
+      donorRepo.findAll(donorScope),
       receiptRepo.findAll(receiptFilter),
-      receiptRepo.recent(50), // pull more, then filter & slice
+      receiptRepo.recent(50),
     ]);
 
     const filteredRecent = (allowedTrustIds

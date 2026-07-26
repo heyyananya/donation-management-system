@@ -2,7 +2,10 @@ import { useEffect, useState } from 'react';
 import { useForm, Controller } from 'react-hook-form';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Box, Paper, Grid, TextField, Button, Stack, Typography, Divider, Chip, MenuItem, Tooltip } from '@mui/material';
+import {
+  Box, Paper, Grid, TextField, Button, Stack, Typography, Divider, Chip,
+  MenuItem, Tooltip, FormControlLabel, Checkbox, FormGroup, Alert,
+} from '@mui/material';
 import SaveIcon from '@mui/icons-material/Save';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import UploadFileIcon from '@mui/icons-material/UploadFile';
@@ -10,6 +13,7 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import { toast } from 'react-toastify';
 import PageHeader from '../../components/feedback/PageHeader.jsx';
 import { donorApi } from '../../api/donor.api.js';
+import { trustApi } from '../../api/trust.api.js';
 import { docTypeLabel } from '../../constants/donorDocTypes.js';
 import { downloadDonorDoc } from '../../utils/downloadDonorDoc.js';
 
@@ -34,38 +38,51 @@ export default function DonorFormPage() {
     queryFn: () => donorApi.get(id),
     enabled: isEdit,
   });
+  const { data: trusts = [] } = useQuery({ queryKey: ['trusts'], queryFn: trustApi.list });
 
   const { control, register, handleSubmit, reset, formState: { errors, isSubmitting } } = useForm({
     defaultValues: { name: '', mobile: '', pan: '', aadhaar: '', voterId: '', passport: '', address: '' },
   });
 
-  // Two upload slots: each { type, file }. Used to stage files while creating a
-  // donor (they upload together on save). In edit mode each slot uploads on its
-  // own via its Upload button.
+  // Two upload slots plus the trust-assignment state. Trusts is separate state
+  // (checkbox list) rather than a react-hook-form field for simplicity.
   const [docSlots, setDocSlots] = useState(emptySlots);
   const setSlot = (i, next) => setDocSlots((s) => s.map((slot, idx) => (idx === i ? next : slot)));
   const [docError, setDocError] = useState('');
   const [identityError, setIdentityError] = useState('');
+  const [trustIds, setTrustIds] = useState([]);
+  const [trustError, setTrustError] = useState('');
 
   useEffect(() => {
-    if (existing) reset({
-      name: existing.name || '', mobile: existing.mobile || '', pan: existing.pan || '',
-      aadhaar: existing.aadhaar || '', voterId: existing.voterId || '',
-      passport: existing.passport || '', address: existing.address || '',
-    });
+    if (existing) {
+      reset({
+        name: existing.name || '', mobile: existing.mobile || '', pan: existing.pan || '',
+        aadhaar: existing.aadhaar || '', voterId: existing.voterId || '',
+        passport: existing.passport || '', address: existing.address || '',
+      });
+      setTrustIds(existing.trustIds || []);
+    }
   }, [existing, reset]);
 
   const save = useMutation({
     mutationFn: (payload) => (isEdit
       ? donorApi.update(id, payload)
-      : donorApi.createWithDocs(payload.values, payload.files)),
+      : donorApi.createWithDocs(payload.values, payload.files, payload.trustIds)),
     onSuccess: (saved) => {
       qc.invalidateQueries({ queryKey: ['donors'] });
       qc.invalidateQueries({ queryKey: ['dashboard'] });
       toast.success(`Donor ${isEdit ? 'updated' : 'created'}`);
       if (!isEdit) nav(`/donors/${saved.id}/edit`, { replace: true });
     },
+    onError: (e) => toast.error(e?.response?.data?.message || 'Could not save donor'),
   });
+
+  const toggleTrust = (tid, checked) => {
+    setTrustIds((prev) =>
+      checked ? [...new Set([...prev, tid])] : prev.filter((x) => x !== tid)
+    );
+    setTrustError('');
+  };
 
   const onSubmit = (values) => {
     if (!values.pan && !values.aadhaar && !values.voterId) {
@@ -74,9 +91,16 @@ export default function DonorFormPage() {
     }
     setIdentityError('');
 
-    // Documents are uploaded per-slot in edit mode, so only the create flow
-    // needs to validate & bundle the staged files here.
-    if (isEdit) { save.mutate(values); return; }
+    if (!trustIds.length) {
+      setTrustError('Select at least one trust this donor belongs to.');
+      return;
+    }
+    setTrustError('');
+
+    if (isEdit) {
+      save.mutate({ ...values, trustIds });
+      return;
+    }
 
     const filled = docSlots.filter((s) => s.file);
     if (!filled.length) {
@@ -94,14 +118,14 @@ export default function DonorFormPage() {
     }
     setDocError('');
     const files = Object.fromEntries(filled.map((s) => [s.type, s.file]));
-    save.mutate({ values, files });
+    save.mutate({ values, files, trustIds });
   };
 
   return (
     <Box>
       <PageHeader
         title={isEdit ? 'Edit Donor' : 'New Donor'}
-        subtitle="Donor identity & document details."
+        subtitle="Donor identity, trust assignments & document details."
         actions={<Button startIcon={<ArrowBackIcon />} onClick={() => nav('/donors')}>Back to list</Button>}
       />
       <Paper sx={{ p: { xs: 2, md: 3 }, borderRadius: 3 }} component="form" onSubmit={handleSubmit(onSubmit)}>
@@ -136,6 +160,40 @@ export default function DonorFormPage() {
           </Grid>
           <Grid item xs={12}>
             <TextField label="Address" multiline rows={3} InputLabelProps={{ shrink: true }} {...register('address')} />
+          </Grid>
+
+          <Grid item xs={12}>
+            <Divider sx={{ my: 1 }} />
+            <Typography variant="subtitle2" sx={{ mb: 0.5 }}>
+              Trust Assignment — at least one is required *
+            </Typography>
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.5 }}>
+              Pick every trust this donor donates to. The donor will only be visible to users who have access to at least one of these trusts.
+            </Typography>
+            {trusts.length === 0 ? (
+              <Alert severity="warning">
+                No trusts available. Create a trust in <strong>Trust Master</strong> first.
+              </Alert>
+            ) : (
+              <FormGroup>
+                <Grid container spacing={1}>
+                  {trusts.map((t) => (
+                    <Grid item xs={12} sm={6} md={4} key={t.id}>
+                      <FormControlLabel
+                        control={
+                          <Checkbox
+                            checked={trustIds.includes(t.id)}
+                            onChange={(_, checked) => toggleTrust(t.id, checked)}
+                          />
+                        }
+                        label={t.name}
+                      />
+                    </Grid>
+                  ))}
+                </Grid>
+              </FormGroup>
+            )}
+            {trustError && <Typography variant="caption" color="error">{trustError}</Typography>}
           </Grid>
 
           <Grid item xs={12}>
@@ -199,9 +257,6 @@ export default function DonorFormPage() {
   );
 }
 
-// One upload slot: a document-type dropdown plus a file picker. In create mode
-// the chosen file is staged in the parent (uploaded together on save); in edit
-// mode an Upload button sends it immediately to the existing donor.
 function DocSlot({ slot, onChange, disabledTypes, isEdit, donorId, disabled }) {
   const qc = useQueryClient();
   const upload = useMutation({
@@ -245,10 +300,6 @@ function DocSlot({ slot, onChange, disabledTypes, isEdit, donorId, disabled }) {
   );
 }
 
-// Read-only view of everything already uploaded (identity docs uploaded via
-// the buttons above, plus any Passport/Other doc uploaded previously) — lets
-// the admin open or remove a file. Uploading itself now only happens through
-// the dedicated Aadhaar/Voter ID/PAN buttons above.
 function DocumentsSection({ donor }) {
   const qc = useQueryClient();
   const remove = useMutation({

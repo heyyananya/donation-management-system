@@ -1,15 +1,21 @@
 import { http } from './axios.js';
 
 export const donorApi = {
-  list: (q = '') => http.get('/donors', { params: { q } }).then((r) => r.data),
+  // `params` may include: q (search), trustId (limit to donors of one trust).
+  list: (params = {}) => {
+    const q = typeof params === 'string' ? params : (params.q || '');
+    const trustId = typeof params === 'object' ? params.trustId : undefined;
+    return http.get('/donors', { params: { q, trustId } }).then((r) => r.data);
+  },
   get: (id) => http.get(`/donors/${id}`).then((r) => r.data),
   create: (data) => http.post('/donors', data).then((r) => r.data),
   // Donor creation requires at least one identity document up front, so the
   // create form submits the donor fields together with the chosen file(s)
   // (aadhaarDoc / voterIdDoc / panDoc) in a single multipart request.
-  createWithDocs: (data, files) => {
+  createWithDocs: (data, files, trustIds = []) => {
     const fd = new FormData();
     Object.entries(data).forEach(([k, v]) => { if (v != null) fd.append(k, v); });
+    trustIds.forEach((id) => fd.append('trustIds', id));
     if (files.aadhaar) fd.append('aadhaarDoc', files.aadhaar);
     if (files.voterId) fd.append('voterIdDoc', files.voterId);
     if (files.pan) fd.append('panDoc', files.pan);

@@ -15,9 +15,6 @@ const IDENTITY_DOC_FIELDS = [
   ['panDoc', 'pan'],
 ];
 
-// Multer writes uploads to disk before this controller runs, so if the request
-// is then rejected (validation error, max-documents reached, …) the file would
-// be left orphaned. Delete any just-uploaded files when that happens.
 function cleanupUploads(req) {
   const files = [];
   if (req.file) files.push(req.file);
@@ -41,9 +38,35 @@ function fileToDocument(file, type, label) {
   };
 }
 
+// Normalize scope options threaded into service calls. `allowedTrustIds` is
+// null for admin (unrestricted); an array (possibly empty) for a scoped user.
+function scopeOpts(req) {
+  return { allowedTrustIds: req.allowedTrustIds };
+}
+
+// Multipart-form field values arrive as strings. `trustIds` may appear as a
+// repeated field (→ array) or a single value (→ string). Normalize to array.
+function readTrustIdsFromBody(body) {
+  if (!body) return undefined;
+  if (body.trustIds !== undefined) {
+    return Array.isArray(body.trustIds) ? body.trustIds : [body.trustIds];
+  }
+  if (body['trustIds[]'] !== undefined) {
+    const v = body['trustIds[]'];
+    return Array.isArray(v) ? v : [v];
+  }
+  return undefined;
+}
+
 export const donorController = {
-  list: async (req, res) => res.json(await donorService.list(req.query.q)),
-  get: async (req, res) => res.json(await donorService.get(req.params.id)),
+  list: async (req, res) => {
+    const listOpts = {
+      trustIds: req.allowedTrustIds,
+      trustId: req.query.trustId || undefined,
+    };
+    res.json(await donorService.list(req.query.q, listOpts));
+  },
+  get: async (req, res) => res.json(await donorService.get(req.params.id, { trustIds: req.allowedTrustIds })),
   create: async (req, res) => {
     try {
       const files = req.files || {};
@@ -60,15 +83,22 @@ export const donorController = {
         cleanupUploads(req);
         return res.status(400).json({ message: `A donor can have at most ${MAX_DOCUMENTS} documents.` });
       }
-      return res.status(201).json(await donorService.create({ ...req.body, documents }));
+      const trustIds = readTrustIdsFromBody(req.body);
+      const created = await donorService.create({ ...req.body, trustIds, documents }, scopeOpts(req));
+      return res.status(201).json(created);
     } catch (err) {
       cleanupUploads(req);
       throw err;
     }
   },
-  update: async (req, res) => res.json(await donorService.update(req.params.id, req.body || {})),
+  update: async (req, res) => {
+    const body = { ...(req.body || {}) };
+    const trustIds = readTrustIdsFromBody(req.body);
+    if (trustIds !== undefined) body.trustIds = trustIds;
+    res.json(await donorService.update(req.params.id, body, scopeOpts(req)));
+  },
   remove: async (req, res) => {
-    await donorService.remove(req.params.id);
+    await donorService.remove(req.params.id, scopeOpts(req));
     res.status(204).end();
   },
   uploadDocument: async (req, res) => {
@@ -76,19 +106,19 @@ export const donorController = {
     try {
       const type = docTypes.includes(req.body.type) ? req.body.type : 'other';
       const doc = fileToDocument(req.file, type, req.body.label);
-      res.status(201).json(await donorService.attachDocument(req.params.id, doc));
+      res.status(201).json(await donorService.attachDocument(req.params.id, doc, scopeOpts(req)));
     } catch (err) {
       cleanupUploads(req);
       throw err;
     }
   },
   removeDocument: async (req, res) => {
-    const donor = await donorService.get(req.params.id);
+    const donor = await donorService.get(req.params.id, { trustIds: req.allowedTrustIds });
     const doc = (donor.documents || []).find((d) => d.id === req.params.docId);
     if (doc) {
       const p = path.join(env.uploadsDir, 'donor-docs', doc.fileName);
       if (fs.existsSync(p)) fs.unlinkSync(p);
     }
-    res.json(await donorService.removeDocument(req.params.id, req.params.docId));
+    res.json(await donorService.removeDocument(req.params.id, req.params.docId, scopeOpts(req)));
   },
 };
