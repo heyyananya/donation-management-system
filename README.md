@@ -1,109 +1,120 @@
 # Donation Management System
 
-Production-ready React + Express donation management system for SHREE VALLABH
-GAUSHALA TRUST and similar trusts. The official PDF templates
-(`Receipt.pdf`, `Letter.pdf`, `ThanksLetter.pdf`) are preserved verbatim — only
-dynamic values are injected at render time.
+A production-ready donation management system built for **SHREE VALLABH GAUSHALA TRUST**
+and similar trusts. It handles donors, trusts, remarks, and donation receipts, and
+generates official PDF receipts, covering letters, and thanks-letter bundles — with the
+original PDF templates preserved verbatim and only dynamic values injected at render time.
 
-## Project layout
+---
 
-```
-backend/         Express + JWT + Multer + pdf-lib
-  src/
-    config/         env, jwt
-    middleware/     auth, error, upload
-    repositories/   json (default), postgres (stubs) — swap via REPO_DRIVER
-    services/       business logic
-    controllers/    HTTP glue
-    routes/         /api/*
-    pdf/            renderers + PDF engine
-    templates/      Receipt.pdf, Letter.pdf, ThanksLetter.pdf (visual reference)
-    uploads/        donor docs, trust logos
-    data/           JSON repository files
-frontend/        Vite + React 18 + MUI + RHF + TanStack Query + Framer Motion
-```
+## Screenshots
 
-## Running locally
+> Drop your screenshot images into a `screenshots/` folder in the repo root and they will
+> render here.
 
-### 1. Backend (port 4000)
+| Login | Dashboard |
+| ----- | --------- |
+| ![Login](screenshots/login.png) | ![Dashboard](screenshots/dashboard.png) |
+
+| Donor Master | Donation Receipt |
+| ------------ | ---------------- |
+| ![Donors](screenshots/donors.png) | ![Receipt](screenshots/receipt.png) |
+
+| Trust Master | Generated PDF Receipt |
+| ------------ | --------------------- |
+| ![Trusts](screenshots/trusts.png) | ![PDF](screenshots/pdf-receipt.png) |
+
+---
+
+## Features
+
+- **Dashboard** — totals and recent activity at a glance.
+- **Donor Master** — full CRUD for donors, plus document upload/download and Excel export.
+- **Trust Master** — manage multiple trusts, each with its own logo.
+- **Remark Master** — reusable remark presets.
+- **Donation Receipts** — full CRUD with automatic per-`(Financial Year, Trust)` numbering
+  that restarts at **1** for every new FY/Trust pair, enforced server-side via an async mutex.
+- **PDF Engine** — coordinate-calibrated renderers produce the receipt, donor's covering
+  letter, and 3-page thanks-letter bundle on blank A4 pages using `pdf-lib`.
+- **Authentication** — JWT-based login (default `admin / admin123`).
+- **Soft deletion** — records are flagged via `is_status` rather than hard-deleted.
+- **Pluggable storage** — services depend only on repository interfaces, so the default
+  JSON store can be swapped for PostgreSQL by setting `REPO_DRIVER=postgres`.
+
+---
+
+## Tech Stack
+
+**Frontend**
+- React 18 + Vite 5
+- Material UI (MUI) 5 + Emotion
+- TanStack Query (React Query)
+- React Hook Form
+- React Router
+- Framer Motion
+- Axios, Day.js, ExcelJS, React-Toastify
+
+**Backend**
+- Node.js + Express 4
+- JWT (`jsonwebtoken`) + `bcryptjs` for auth
+- Multer for file uploads, Sharp for image processing
+- `pdf-lib` for PDF generation
+- `async-mutex` for safe receipt numbering
+- JSON file repositories by default; PostgreSQL (`pg`) driver ready to wire in
+
+**Tooling**
+- `concurrently` (one-command dev launcher)
+- `nodemon` (backend live-reload)
+
+---
+
+## Installation
+
+**Prerequisites:** Node.js 18+ and npm.
+
+### 1. Clone the repository
 
 ```bash
-cd backend
-npm install
-npm run seed     # one-time: creates default trust, donor, remarks
-npm run dev      # node --watch src/server.js
+git clone <your-repo-url>
+cd Vallabh_ashram_Donation_claude
 ```
 
-Defaults from `.env` (override via `.env.example`):
-- Login: `admin / admin123`
-- JWT lifetime: 1 day
-- Repo driver: `json` (files under `backend/src/data/`)
-
-### 2. Frontend (port 5173)
+### 2. Install dependencies (root + backend + frontend)
 
 ```bash
-cd frontend
-npm install
+npm run install:all
+```
+
+### 3. Seed initial data (one-time)
+
+```bash
+npm run seed
+```
+
+This creates the default trust, donor, remarks, and admin login.
+
+### 4. Run the app (backend + frontend together)
+
+```bash
 npm run dev
 ```
 
-Open http://localhost:5173 and sign in with `admin / admin123`.
+- Backend → http://localhost:4000
+- Frontend → http://localhost:5173
 
-## Feature map
+Open the frontend URL and sign in with:
 
-| Module               | Where                                                        |
-| -------------------- | ------------------------------------------------------------ |
-| Dashboard            | `frontend/src/pages/dashboard/DashboardPage.jsx`             |
-| Donor Master         | `frontend/src/pages/donor/*`                                 |
-| Trust Master         | `frontend/src/pages/trust/*`                                 |
-| Remark Master        | `frontend/src/pages/remark/*`                                |
-| Donation Receipt     | `frontend/src/pages/receipt/*`                               |
+```
+username: admin
+password: admin123
+```
 
-## Receipt numbering rule
+### Useful scripts
 
-Receipt numbers restart at **1** for every `(Financial Year, Trust)` pair. The
-sequence is enforced server-side with a per-`(fy, trustId)` async mutex in
-`backend/src/services/receipt.service.js`. Verified at runtime:
-
-| Step | Expected | Got |
-| ---- | -------- | --- |
-| Trust A · FY 2026-27 · 1st | 1 | 1 |
-| Trust A · FY 2026-27 · 2nd | 2 | 2 |
-| Trust B · FY 2026-27 · 1st | 1 | 1 |
-| Trust A · FY 2024-25 · 1st | 1 | 1 |
-
-## PDF engine
-
-Coordinate-calibrated renderers (`backend/src/pdf/renderers/*.js`) draw the
-receipt, donor's covering letter, and the 3-page thanks letter bundle on blank
-A4 pages using `pdf-lib`. The original PDFs in `backend/src/templates/` are
-kept on disk purely as the visual reference used to calibrate those
-coordinates — adjust the constants at the top of each renderer to nudge
-positions if needed.
-
-## Database swap (future PostgreSQL)
-
-All services depend only on repository interfaces. To switch to Postgres:
-1. Implement matching repos in `backend/src/repositories/postgres/`
-   (interfaces documented in `backend/src/repositories/postgres/README.md`).
-2. Wire them into `drivers.postgres` in `backend/src/repositories/index.js`.
-3. Set `REPO_DRIVER=postgres` in `.env`.
-
-No service, controller, route, or frontend code needs to change.
-
-## API quick reference
-
-All endpoints are prefixed with `/api`, all require `Authorization: Bearer <jwt>`
-except `/auth/login` and `/health`.
-
-| Method | Path | Notes |
-| ------ | ---- | ----- |
-| POST   | `/auth/login`                        | `{ username, password }` → `{ token, user }` |
-| GET    | `/dashboard/summary`                 | totals + recent activity |
-| GET/POST/PUT/DELETE | `/donors[/:id]`         | + `/documents` POST/DELETE for files |
-| GET/POST/PUT/DELETE | `/trusts[/:id]`         | + `/logo` POST/DELETE |
-| GET/POST/PUT/DELETE | `/remarks[/:id]`        | |
-| GET    | `/receipts/meta`                     | payment types + current FY |
-| GET    | `/receipts/peek-number?fy=&trustId=` | next auto-number |
-| GET/POST/PUT/DELETE | `/receipts[/:id]`       | full CRUD with FY+Trust numbering |
-| GET    | `/pdf/:type/:receiptId`              | `type ∈ { receipt, letter, thanks-letter }` |
+| Command             | What it does                                  |
+| ------------------- | --------------------------------------------- |
+| `npm run dev`       | Runs backend + frontend with live-reload      |
+| `npm run install:all` | Installs root, backend, and frontend deps   |
+| `npm run seed`      | Seeds default trust, donor, remarks, admin    |
+| `npm run migrate`   | Runs backend database migrations              |
+| `npm run build`     | Builds the frontend for production            |
